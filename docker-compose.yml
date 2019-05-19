@@ -1,0 +1,21 @@
+version: '3.3'
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: db.Dockerfile
+    ports:
+      - 4500:4500
+    environment:
+      - HOST_IP=0.0.0.0
+  client:
+    build:
+      context: .
+      dockerfile: client.Dockerfile
+    depends_on:
+      - db
+    environment:
+      - FDBHOSTNAME=db
+    volumes:
+      - ./app:/opt/app

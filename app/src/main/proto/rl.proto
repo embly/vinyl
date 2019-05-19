@@ -1,0 +1,17 @@
+syntax = "proto2";
+
+option java_outer_classname = "RecordLayerDemoProto";
+
+import "record_metadata_options.proto";
+
+message Value {
+    optional int64 id = 1;
+    optional string key = 2;
+    optional string value = 3;
+    optional int64 int_value = 4;
+}
+
+message UnionDescriptor {
+    option (com.apple.foundationdb.record.record).usage = UNION;
+    optional Value _Value = 1;
+}
