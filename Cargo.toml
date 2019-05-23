@@ -1,0 +1,5 @@
+[workspace]
+members = [
+  "fdb",
+  "fdb_derive",
+]

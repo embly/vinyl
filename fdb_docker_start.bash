@@ -50,6 +50,9 @@ if [[ "${HOST_IP}" == "0.0.0.0" ]] ; then
 	HOST_IP="${PUBLICIP}"
 fi
 
+PUBLICIP="127.0.0.1"
+HOST_IP="127.0.0.1"
+
 FDBHOST="${FDBHOST:-$HOST_IP}"
 FDBPORT="${FDBPORT:-4500}"
 
@@ -216,7 +219,7 @@ then
 	echo 'Failed to display user message'
 	let status="${status} + 1"
 
-# Remove any existing data from within the data directory 
+# Remove any existing data from within the data directory
 elif ! rm -rf "${FDBDATADIR}"
 then
 	let timespent="${SECONDS}-${messagetime}"

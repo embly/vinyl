@@ -21,139 +21,120 @@ import java.util.*
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
-fun getGreeting(): String {
-    val words = mutableListOf<String>()
-    words.add("Hello,")
-    words.add("world!")
 
-    return words.joinToString(separator = " ")
-}
-
-fun main(args: Array<String>) {
+fun main() {
     val server = ServerSocket(9999)
-    val db = FDBDatabaseFactory.instance().getDatabase()
+    val db = FDBDatabaseFactory.instance().getDatabase("/Users/maxm/go/src/github.com/wasabi/fdb/app/fdb.cluster")
+
     println("Server is running on port ${server.localPort}")
 
     while (true) {
         val client = server.accept()
+
         println("Client connected: ${client.inetAddress.hostAddress}")
 
         // Run client in it's own thread.
         thread { ClientHandler(client, db).run() }
     }
 
-
-    // db.run(fun (context) {
-    //     val recordStore = recordStoreProvider(context)
-
-    //     recordStore.saveRecord(RecordLayerDemoProto.Value.newBuilder()
-    //         .setKey("foo")
-    //         .setValue("asdfasdf")
-    //         .setIntValue(4)
-    //         .build())
-    // })
-
-    // val storedRecord = db.run(fun (context): FDBStoredRecord<Message>? {
-    //     println("Within context")
-    //     return recordStoreProvider(context).loadRecord(Tuple.from("foo"))
-    // })
-
-    // println(storedRecord)
-    // if (storedRecord != null) {
-    //     println(storedRecord.getRecord())
-    // }
-
 }
 
-class ClientHandler(client: Socket, db: FDBDatabase) {
-    private val client: Socket = client
-    private val db: FDBDatabase = db
+class ClientHandler(
+        private val client: Socket,
+        private val db: FDBDatabase
+) {
     private val reader: Scanner = Scanner(client.getInputStream())
     private val writer: OutputStream = client.getOutputStream()
     private var running: Boolean = false
     private var database: String? = null
-    private var store: FDBRecordStore? = null
     private var path: KeySpacePath? = null
     private var metaDataBuilder: RecordMetaDataBuilder? = null
 
     fun run() {
-        running = true
+        this.running = true
         // Welcome message
-        write("Welcome to the server!\n" +
+        this.write("Welcome to the server!\n" +
                 "To Exit, write: 'exit'.")
-        while (running) {
+        while (this.running) {
             try {
                 val text = reader.nextLine()
-                if (text == "exit"){
-                    shutdown()
+                if (text == "exit") {
+                    this.shutdown()
                     continue
                 }
                 processCommand(text)
             } catch (ex: Exception) {
                 println(ex)
-                shutdown()
+                this.shutdown()
             } finally {
 
             }
         }
 
-        shutdown()
+        this.shutdown()
     }
+
     private fun processCommand(text: String) {
         val parts = text.split(" ")
-        if (parts.size == 0) {
+        if (parts.isEmpty()) {
             return
         }
         println(parts)
         val command = parts[0]
         if (command == "setup") {
             this.setup(parts[1])
-            write("Database set to ${parts[1]}")
+            this.write("Database set to ${parts[1]}")
             return
         }
         if (database == null) {
-            write("Database has not been set. Set with \"SETUP name\"")
+            this.write("Database has not been set. Set with \"SETUP name\"")
             return
         }
-        if (command == "get") {
-            if (parts.size < 2) {
-                write("ERR wrong number of arguments for 'get' command")
-                return
+        when (command) {
+            "get" -> {
+                if (parts.size < 2) {
+                    this.write("ERR wrong number of arguments for 'get' command")
+                    return
+                }
+                this.write(this.get(parts[1]))
             }
-            write("${this.get(parts[1])}")
-        } else if (command == "set") {
-            if (parts.size < 3) {
-                write("ERR wrong number of arguments for 'set' command")
-                return
+            "set" -> {
+                if (parts.size < 3) {
+                    this.write("ERR wrong number of arguments for 'set' command")
+                    return
+                }
+                this.set(parts[1], parts[2])
+                this.write("OK")
             }
-            this.set(parts[1], parts[2])
-            write("OK")
-        } else {
-            write("Command \"${command}\" not found")
+            else -> {
+                this.write("Command \"$command\" not found")
+            }
+
         }
     }
+
     private fun write(text: String) {
         writer.write((text + '\n').toByteArray(Charset.defaultCharset()))
     }
 
     private fun get(key: String): String {
-        val storedRecord = this.db.run(fun (context): FDBStoredRecord<Message>? {
+        val storedRecord = this.db.run(fun(context: FDBRecordContext): FDBStoredRecord<Message>? {
             return this.provider(context).loadRecord(Tuple.from(key))
         })
         if (storedRecord != null) {
-            var value = RecordLayerDemoProto.Value.newBuilder().mergeFrom(storedRecord.getRecord()).build()
-            return value.getValue()
+            val value = RecordLayerDemoProto.Value.newBuilder().mergeFrom(storedRecord.record).build()
+            return value.value
         }
         return ""
     }
 
     private fun set(key: String, value: String) {
-        this.db.run(fun (context) {
+        this.db.run(fun(context: FDBRecordContext) {
             this.provider(context)
-                .saveRecord(RecordLayerDemoProto.Value.newBuilder()
-                .setKey(key)
-                .setValue(value)
-                .build())
+                    .saveRecord(RecordLayerDemoProto.Value.newBuilder()
+                            .setKey(key)
+                            .setValue(value)
+                            .build())
         })
     }
 
@@ -163,10 +144,10 @@ class ClientHandler(client: Socket, db: FDBDatabase) {
 
         this.path = keySpace.path(name)
         val mdb = RecordMetaData.newBuilder()
-                        .setRecords(RecordLayerDemoProto.getDescriptor())
+                .setRecords(RecordLayerDemoProto.getDescriptor())
 
         mdb.getRecordType("Value")
-            .setPrimaryKey(Key.Expressions.field("key"))
+                .setPrimaryKey(Key.Expressions.field("key"))
 
         this.metaDataBuilder = mdb
     }
@@ -174,15 +155,15 @@ class ClientHandler(client: Socket, db: FDBDatabase) {
 
     private fun provider(context: FDBRecordContext): FDBRecordStore {
         return FDBRecordStore.newBuilder()
-            .setMetaDataProvider(this.metaDataBuilder)
-            .setContext(context)
-            .setKeySpacePath(this.path)
-            .createOrOpen()
+                .setMetaDataProvider(this.metaDataBuilder)
+                .setContext(context)
+                .setKeySpacePath(this.path)
+                .createOrOpen()
     }
 
     private fun shutdown() {
-        running = false
-        client.close()
+        this.running = false
+        this.client.close()
         println("${client.inetAddress.hostAddress} closed the connection")
         exitProcess(0)
     }
