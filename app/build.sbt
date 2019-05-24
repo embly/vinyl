@@ -76,4 +76,4 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 
 libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.6.60.0"
 libraryDependencies += "org.scala-lang.modules" % "scala-java8-compat_2.12" % "0.9.0"
-libraryDependencies += "com.github.os72" % "protobuf-dynamic" % "1.0.0"
+//libraryDependencies += "com.github.os72" % "protobuf-dynamic" % "1.0.0"

@@ -44,3 +44,21 @@ fn main() {
     user.save();
     println!("{:?}", user.id);
 }
+
+#[derive(Serialize, Deserialize)]
+struct Msg {
+    envelope: String,
+    body: Vec<u8>,
+    tag: String,
+}
+
+// fn go(msg: Msg) {
+//     msg.reply(Response);
+
+//     wasabi.spawn("db/query", Msg { tag: "hi" });
+
+//     match wasabi.receive() {
+//         Msg { tag: "hi", .. } => {}
+//         _ => {}
+//     };
+// }

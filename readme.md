@@ -1,1 +1,3 @@
-https://github.com/os72/protobuf-dynamic
+
+
+https://serde.rs/impl-serializer.html
