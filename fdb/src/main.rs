@@ -1,9 +1,11 @@
 use fdb::Record;
 use fdb_derive;
 use fdb_derive::Record;
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
+use uuid::Uuid;
 
-#[derive(Record)]
+#[derive(Record, Deserialize, Serialize)]
 struct Event {
     #[fdb(id)]
     id: i32,
@@ -16,7 +18,7 @@ struct Event {
 
 #[derive(Record)]
 struct User {
-    id: i64,
+    id: uuid::Uuid,
     #[fdb(index)]
     group: String,
     #[fdb(unique)]
@@ -29,7 +31,7 @@ struct User {
 impl User {
     fn new() -> Self {
         Self {
-            id: 0,
+            id: uuid::Uuid::new_v4(),
             group: String::from("staff"),
             email: String::from("max@max.com"),
             name: String::from("ok"),
@@ -38,8 +40,15 @@ impl User {
     }
 }
 
+
+
+fn handle(f: std::fs::File) {
+    let mut msg = vec![];
+    f.read_to_end(&msg);
+    println!(msg);
+}
+
 fn main() {
-    // Event::hello_macro();
     let mut user = User::new();
     user.save();
     println!("{:?}", user.id);

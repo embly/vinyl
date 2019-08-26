@@ -1,5 +1,6 @@
 pub trait Record {
     fn hello_macro();
+    // fn get_metadata(&self, metadata: String);
     fn save(&mut self);
 }
 

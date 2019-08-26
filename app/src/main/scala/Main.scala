@@ -41,7 +41,7 @@ object Main extends App {
 
 
   val msgBuilder = schema.newMessageBuilder("Value")
-  val msgDesc = msgBuilder.getDescriptorForType()
+  val msgDesc = msgBuilder.getDescriptorForType
 
   val context = db.openContext()
 

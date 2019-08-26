@@ -4,7 +4,7 @@ services:
   db:
     build:
       context: .
-      dockerfile: db.Dockerfile
+      dockerfile: ./db/db.Dockerfile
     ports:
       - 4500:4500
     environment:
@@ -12,7 +12,7 @@ services:
   client:
     build:
       context: .
-      dockerfile: client.Dockerfile
+      dockerfile: ./db/client.Dockerfile
     depends_on:
       - db
     environment:

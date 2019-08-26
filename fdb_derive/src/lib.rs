@@ -40,7 +40,7 @@ fn impl_hello_macro(ast: &syn::DeriveInput) -> TokenStream {
                 println!("Hello, Macro! My name is {}", stringify!(#name));
             }
             fn save(&mut self) {
-                self.id = 1
+                // self.id = 1
             }
         }
     };
