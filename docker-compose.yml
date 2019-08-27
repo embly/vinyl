@@ -1,4 +1,4 @@
-version: '3.3'
+version: "3.3"
 
 services:
   db:
@@ -15,7 +15,13 @@ services:
       dockerfile: ./db/client.Dockerfile
     depends_on:
       - db
+    ports:
+      - 8090:8090
     environment:
       - FDBHOSTNAME=db
     volumes:
       - ./app:/opt/app
+      - ivycache:/root/.ivy2/cache
+
+volumes:
+  ivycache: {}

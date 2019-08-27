@@ -74,6 +74,19 @@ libraryDependencies += "org.typelevel" %% "cats-core" % "1.6.0"
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 
-libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.6.60.0"
+libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.7.74.0"
 libraryDependencies += "org.scala-lang.modules" % "scala-java8-compat_2.12" % "0.9.0"
-//libraryDependencies += "com.github.os72" % "protobuf-dynamic" % "1.0.0"
+
+libraryDependencies += "com.typesafe.akka" %% "akka-stream" % "2.5.23"
+libraryDependencies += "com.typesafe.akka" %% "akka-http" % "10.1.9"
+// https://mvnrepository.com/artifact/com.typesafe.akka/akka-http2-support
+libraryDependencies += "com.typesafe.akka" %% "akka-http2-support" % "10.1.9"
+
+libraryDependencies += "fr.davit" %% "akka-http-scalapb" % "0.2.1"
+PB.targets in Compile := Seq(
+  scalapb.gen() -> (sourceManaged in Compile).value
+)
+
+// (optional) If you need scalapb/scalapb.proto or anything from
+// google/protobuf/*.proto
+// libraryDependencies += "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"

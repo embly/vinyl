@@ -50,8 +50,11 @@ if [[ "${HOST_IP}" == "0.0.0.0" ]] ; then
 	HOST_IP="${PUBLICIP}"
 fi
 
-PUBLICIP="127.0.0.1"
-HOST_IP="127.0.0.1"
+
+# you'll need to uncomment these if you want to access the db on localhost
+# even with a different broadcast ip the database will respond with an ip to use
+# PUBLICIP="127.0.0.1"
+# HOST_IP="127.0.0.1"
 
 FDBHOST="${FDBHOST:-$HOST_IP}"
 FDBPORT="${FDBPORT:-4500}"

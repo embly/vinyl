@@ -5,6 +5,6 @@ RUN yum install -y which initscripts rsync net-tools passwd https://www.foundati
 
 USER root
 
-COPY fdb_docker_start.bash /usr/lib/foundationdb/
+COPY ./db/fdb_docker_start.bash /usr/lib/foundationdb/
 
 ENTRYPOINT ["/bin/bash", "-c", "/usr/lib/foundationdb/fdb_docker_start.bash 2"]
