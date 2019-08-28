@@ -59,13 +59,12 @@ object Main extends App with ScalaPBSupport {
     }
     activeSessions.contains(token.get.value)
   }
-
   val routes: Route = entity(as[vinyl.messages.Query]) { query =>
     {
       println(query)
       concat(
         path("start") {
-          val descriptor = FileDescriptorProto
+          val descriptor: FileDescriptorProto = FileDescriptorProto
             .parseFrom(
               query.fileDescriptor
             )
@@ -122,6 +121,7 @@ object Main extends App with ScalaPBSupport {
       .addField("optional", "string", "email", 3)
       .build()
   )
+
   schemaBuilder.addMessageDefinition(
     MessageDefinition
       .newBuilder("RecordTypeUnion")

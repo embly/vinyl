@@ -81,6 +81,7 @@ func (c *Client) responseWrapper(resp *http.Response, err error) error {
 	return nil
 }
 
+// Get is ...
 func (c *Client) Get(url string) {
 	resp, err := c.httpClient.Get(url)
 	if err != nil {
@@ -94,6 +95,7 @@ func (c *Client) Get(url string) {
 	fmt.Println(string(b))
 }
 
-func (c *Client) AddMetadata(tables ...metadata.Table) {
+// AddMetadata is ...
+func (c *Client) AddMetadata(tables ...Table) {
 	return
 }

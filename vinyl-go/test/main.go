@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
-	vinyl "github.com/embly/vinyl/go-client"
-	md "github.com/embly/vinyl/go-client/metadata"
+	vinyl "github.com/embly/vinyl/vinyl-go"
+	md "github.com/embly/vinyl/vinyl-go/metadata"
 
 )
 
@@ -15,8 +15,7 @@ func main() {
 	}
 
 	c.AddMetadata(
-		qm.Table("User", "id", qm.Index("email")),
-		qm.Table("User", "id", qm.Index("email")),
+		md.Table("User", "id", md.Index("email")),
 	)
 	// c.Get("http://localhost:8090/start")
 	// c.Get("http://localhost:8090")

@@ -8,13 +8,13 @@ RUN yum install -y java-1.8.0-openjdk-devel python git unzip wget which time \
     && rm sbt-1.2.8.rpm
 
 RUN mkdir -p /usr/local/bin
-COPY ./db/fdb_create_cluster_file.bash /usr/local/bin/fdb_create_cluster_file.bash
+COPY ./fdb/fdb_create_cluster_file.bash /usr/local/bin/fdb_create_cluster_file.bash
 
 # ENV VERSION_NUMBER=2.6.60.0
 
 WORKDIR /opt/app/
 
-COPY ./db/client_entrypoint.sh /opt/entrypoint.sh
+COPY ./fdb/client_entrypoint.sh /opt/entrypoint.sh
 
 CMD /opt/entrypoint.sh
 

@@ -1,10 +1,10 @@
 version: "3.3"
 
 services:
-  db:
+  fdb:
     build:
       context: .
-      dockerfile: ./db/db.Dockerfile
+      dockerfile: ./fdb/db.Dockerfile
     ports:
       - 4500:4500
     environment:
@@ -12,15 +12,15 @@ services:
   client:
     build:
       context: .
-      dockerfile: ./db/client.Dockerfile
+      dockerfile: ./fdb/client.Dockerfile
     depends_on:
-      - db
+      - fdb
     ports:
       - 8090:8090
     environment:
-      - FDBHOSTNAME=db
+      - FDBHOSTNAME=fdb
     volumes:
-      - ./app:/opt/app
+      - ./vinyl:/opt/app
       - ivycache:/root/.ivy2/cache
 
 volumes:
