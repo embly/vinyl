@@ -10,6 +10,9 @@ message Query {
   repeated Insert insertions = 6;
 }
 
+message Response {
+  string error = 1;
+}
 
 message Insert {
   string table = 1;

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"reflect"
 
 	"github.com/embly/vinyl/vinyl-go/descriptor"
 	md "github.com/embly/vinyl/vinyl-go/metadata"
@@ -110,8 +111,26 @@ func (db *DB) Close() (err error) {
 	return nil
 }
 
+type DBQuery struct {
+	// placeholder
+}
+
+func (db *DB) First(msg proto.Message, query ...DBQuery) (err error) {
+	return nil
+}
+
+func (db *DB) All(msgs interface{}, query ...DBQuery) (err error) {
+	rv := reflect.ValueOf(msgs)
+	msgType := rv.Elem().Type().Elem()
+	val := reflect.New(msgType).Interface()
+	name := proto.MessageName(val.(proto.Message))
+	fmt.Println(name)
+	return nil
+}
+
 // Insert ...
 func (db *DB) Insert(msg proto.Message) (err error) {
+
 	query := Query{}
 	b, err := proto.Marshal(msg)
 	if err != nil {
@@ -121,7 +140,6 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 		Table: proto.MessageName(msg),
 		Data:  b,
 	})
-	fmt.Printf("%x\n", b)
 	return db.sendQuery(query, "")
 }
 
@@ -144,7 +162,13 @@ func (db *DB) responseWrapper(resp *http.Response, err error) error {
 		return err
 	}
 	b, _ := ioutil.ReadAll(resp.Body)
-
+	respProto := Response{}
+	if err := proto.Unmarshal(b, &respProto); err != nil {
+		return errors.Wrap(err, "error unmarshalling the database response")
+	}
+	if respProto.Error != "" {
+		return errors.New(respProto.Error)
+	}
 	// TODO: protobuf responses
 	if resp.StatusCode > 299 {
 		return errors.Errorf("Got error response from server: %d %s", resp.StatusCode, (b))

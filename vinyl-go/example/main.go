@@ -34,6 +34,10 @@ func main() {
 	if err := db.Insert(&user); err != nil {
 		log.Fatal(err)
 	}
+
+	users := []User{}
+	log.Println(db.First(&user))
+	log.Println(db.All(&users))
 	// c.Get("http://localhost:8090/start")
 	// c.Post("http://localhost:8090")
 

@@ -4,36 +4,37 @@ import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpace
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpaceDirectory
 import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder}
-import com.apple.foundationdb.record.metadata.{Key, Index}
+import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.provider.foundationdb.FDBRecordStore
 import com.apple.foundationdb.tuple.Tuple
 import com.apple.foundationdb.record.provider.foundationdb.FDBStoredRecord
 import com.github.os72.protobuf.dynamic.DynamicSchema
 import com.github.os72.protobuf.dynamic.MessageDefinition
-import com.google.protobuf.{Message, ByteString}
-import com.google.protobuf.DescriptorProtos.{
-  FileDescriptorProto,
-  DescriptorProto
-}
-import com.google.protobuf.Descriptors.{FileDescriptor, Descriptor}
+import com.google.protobuf.{ByteString, Message}
+import com.google.protobuf.DescriptorProtos.{DescriptorProto, FileDescriptorProto}
+import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
 import com.google.protobuf.DynamicMessage
+
 import scala.io.Source
 import akka.http.scaladsl.Http2
 import akka.http.scaladsl.HttpConnectionContext
 import akka.actor.ActorSystem
+import akka.http.scaladsl.marshalling.ToResponseMarshallable
 import akka.http.scaladsl.{ConnectionContext, Http, Http2}
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Directives
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.http.scaladsl.model.headers.{HttpCookiePair, HttpCookie}
+import akka.http.scaladsl.model.headers.{HttpCookie, HttpCookiePair}
+
 import scala.concurrent.{Await, Future}
 import akka.stream.ActorMaterializer
+
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.collection.mutable.HashMap
-import scala.concurrent.{ExecutionContext}
-import fr.davit.akka.http.scaladsl.marshallers.scalapb.ScalaPBSupport
+import scala.concurrent.ExecutionContext
+import fr.davit.akka.http.scaladsl.marshallers.scalapb.ScalaPBBinarySupport
 
 class Session(ks: String, descriptorBytes: ByteString) {
 
@@ -55,7 +56,7 @@ class Session(ks: String, descriptorBytes: ByteString) {
 
 }
 
-object Main extends App with ScalaPBSupport {
+object Main extends App with ScalaPBBinarySupport {
 
   def randomString(length: Int) = {
     val chars = ('a' to 'z') ++ ('0' to '9')
@@ -121,7 +122,7 @@ object Main extends App with ScalaPBSupport {
             // TODO: auth values and session
             activeSessions += (token -> session)
             setCookie(HttpCookie("vinyl-token", value = token)) {
-              complete("ok")
+              complete(vinyl.messages.Response())
             }
           },
           optionalCookie("vinyl-token") { cookie =>
@@ -167,7 +168,7 @@ object Main extends App with ScalaPBSupport {
               context.commit()
               context.close()
 
-              complete("ok")
+              complete(vinyl.messages.Response())
             }
           }
         )
