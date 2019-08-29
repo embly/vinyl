@@ -5,7 +5,6 @@ import (
 
 	vinyl "github.com/embly/vinyl/vinyl-go"
 	md "github.com/embly/vinyl/vinyl-go/metadata"
-
 )
 
 func main() {
@@ -15,7 +14,7 @@ func main() {
 	}
 
 	c.AddMetadata(
-		md.Table("User", "id", md.Index("email")),
+		md.Table("Query", "id", md.Index("email")),
 	)
 	// c.Get("http://localhost:8090/start")
 	// c.Get("http://localhost:8090")

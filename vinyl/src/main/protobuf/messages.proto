@@ -9,8 +9,6 @@ message Query {
   repeated Table tables = 5;
 }
 
-message RecordTypeUnion { Query _Query = 1; }
-
 message Table {
   map<string, FieldOptions> field_options = 1;
   string name = 2;
@@ -26,3 +24,6 @@ message FieldOptions {
   }
   IndexOption index = 3;
 }
+
+
+// message RecordTypeUnion { Query _Query = 1; }

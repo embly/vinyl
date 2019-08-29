@@ -2,7 +2,6 @@ package vinyl
 
 import (
 	"bytes"
-	"compress/gzip"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 
+	"github.com/embly/vinyl/vinyl-go/descriptor"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/http2"
@@ -49,23 +49,21 @@ func (c *Client) Connect(username, password, keyspace string) (err error) {
 		Password: password,
 		Keyspace: keyspace,
 	}
-	query.FileDescriptor, _ = query.Descriptor()
-	zr, err := gzip.NewReader(bytes.NewBuffer(query.FileDescriptor))
-	if err != nil {
-		log.Fatal(err)
-	}
-	b, err := ioutil.ReadAll(zr)
-	if err != nil {
-		return err
-	}
-	zr.Close()
-	query.FileDescriptor = b
-	fmt.Println(string(b))
-	b, err = proto.Marshal(&query)
+	b, _ := query.Descriptor()
+	b, err = descriptor.AddRecordTypeUnion(b, []string{"Query"})
 	if err != nil {
 		return
 	}
-	return c.responseWrapper(c.httpClient.Post("http://localhost:8090/start", "application/protobuf", bytes.NewBuffer(b)))
+
+	query.FileDescriptor = b
+	if b, err = proto.Marshal(&query); err != nil {
+		return err
+	}
+	return c.responseWrapper(c.httpClient.Post(
+		"http://localhost:8090/start",
+		"application/protobuf",
+		bytes.NewBuffer(b),
+	))
 }
 
 func (c *Client) responseWrapper(resp *http.Response, err error) error {

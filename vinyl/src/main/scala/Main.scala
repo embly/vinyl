@@ -62,12 +62,14 @@ object Main extends App with ScalaPBSupport {
   val routes: Route = entity(as[vinyl.messages.Query]) { query =>
     {
       println(query)
+
       concat(
         path("start") {
           val descriptor: FileDescriptorProto = FileDescriptorProto
             .parseFrom(
               query.fileDescriptor
             )
+          
           val metaDataBuilder = RecordMetaData
             .newBuilder()
             .setRecords(FileDescriptor.buildFrom(descriptor, Array()))
