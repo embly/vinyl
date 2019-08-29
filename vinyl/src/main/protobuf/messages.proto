@@ -7,6 +7,13 @@ message Query {
   string keyspace = 3;
   bytes file_descriptor = 4;
   repeated Table tables = 5;
+  repeated Insert insertions = 6;
+}
+
+
+message Insert {
+  string table = 1;
+  bytes data = 2;
 }
 
 message Table {

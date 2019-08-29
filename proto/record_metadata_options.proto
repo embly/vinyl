@@ -30,9 +30,7 @@ message SchemaOptions {
   optional bool store_record_versions = 4;
 }
 
-extend google.protobuf.FileOptions {
-  optional SchemaOptions schema = 1233;
-}
+extend google.protobuf.FileOptions { optional SchemaOptions schema = 1233; }
 
 message RecordTypeOptions {
   enum Usage {
@@ -41,8 +39,10 @@ message RecordTypeOptions {
     UNION = 2;
     NESTED = 3;
   }
-  optional Usage usage = 1 [default = UNSET];
-  optional int32 since_version = 2; // This record_type is introduced on this metadata version
+  optional Usage usage = 1 [ default = UNSET ];
+  optional int32 since_version = 2;
+  // This record_type is introduced on this metadata version
+
   optional Value record_type_key = 3;
 }
 
@@ -51,16 +51,15 @@ extend google.protobuf.MessageOptions {
 }
 
 message FieldOptions {
-  optional Index.Type indexed = 1 [deprecated = true]; // Use index.type.
+  optional Index.Type indexed = 1 [ deprecated = true ]; // Use index.type.
   optional bool primary_key = 2;
   message IndexOption {
-    optional string type = 1 [default = "value"];
+    optional string type = 1 [ default = "value" ];
     optional bool unique = 2;
-    repeated Index.Option options = 3; // Note: there is no way to specify these in a .proto file.
+    repeated Index.Option options = 3;
+    // Note: there is no way to specify these in a .proto file.
   }
   optional IndexOption index = 3;
 }
 
-extend google.protobuf.FieldOptions {
-  optional FieldOptions field = 1233;
-}
+extend google.protobuf.FieldOptions { optional FieldOptions field = 1233; }
