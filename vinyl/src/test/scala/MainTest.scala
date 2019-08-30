@@ -1,11 +1,16 @@
 import com.github.os72.protobuf.dynamic.DynamicSchema
 import com.github.os72.protobuf.dynamic.MessageDefinition
 import com.google.protobuf.{ByteString, Message}
+import com.apple.foundationdb.record.query.RecordQuery
+import com.apple.foundationdb.record.query.expressions.{Query, QueryComponent}
 import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder}
 import com.google.protobuf.DescriptorProtos.{DescriptorProto, FileDescriptorProto}
 import com.google.protobuf.Descriptors.FileDescriptor
 import org.scalatest.FunSuite
-import main.Main
+import vinyl.transport
+import collection.mutable.ArrayBuffer
+import collection.JavaConverters._
+
 
 class MainTest extends FunSuite {
   test("with lib") {
@@ -37,6 +42,49 @@ class MainTest extends FunSuite {
     var metadata: RecordMetaDataBuilder = RecordMetaData
       .newBuilder()
       .setRecords(fileDescriptor)
+
+  }
+
+
+  test("query building") {
+
+    val recordQueryBuilder = RecordQuery.newBuilder().setFilter(
+      Query.and(
+        ArrayBuffer(
+          Query.field("price").lessThan(50),
+          Query.field("flower").matches(Query.field("type").equalsValue("ROSE"))
+        ).asJava
+      )
+    )
+
+    var query = transport.Query(recordType="Order", filter = Some(transport.QueryComponent(
+      children = Array(
+        transport.QueryComponent(
+          componentType = transport.QueryComponent.ComponentType.FIELD,
+          field=Some(transport.Field(
+            name="price",
+            componentType = transport.Field.ComponentType.LESS_THAN,
+            value = Some(transport.Value(int32 = 50, valueType = transport.Value.ValueTypeEnum.INT32))
+          ))),
+        transport.QueryComponent(
+          componentType = transport.QueryComponent.ComponentType.FIELD,
+          field=Some(transport.Field(
+            name="flower",
+            componentType = transport.Field.ComponentType.MATCHES,
+            matches = Some(transport.QueryComponent(
+              componentType = transport.QueryComponent.ComponentType.FIELD,
+              field=Some(transport.Field(
+                name="type",
+                componentType = transport.Field.ComponentType.EQUALS,
+                value = Some(transport.Value(string = "ROSE", valueType = transport.Value.ValueTypeEnum.STRING))
+              ))
+            ))
+          ))
+        )
+      )
+    )))
+
+    assert(recordQueryBuilder.build().getFilter.toString == main.Main.buildQuery(query).getFilter.toString)
 
 
   }

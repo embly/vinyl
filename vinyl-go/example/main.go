@@ -6,18 +6,41 @@ import (
 	"log"
 
 	vinyl "github.com/embly/vinyl/vinyl-go"
-	md "github.com/embly/vinyl/vinyl-go/metadata"
 	proto "github.com/golang/protobuf/proto"
 )
 
-func main() {
+type Query struct {
+	And      []Query
+	Field    string
+	LessThan Value
+	Equals   Value
+	Matches  *Query
+}
+type Value struct {
+	Int    int
+	String string
+}
 
-	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", md.Metadata{
+// Query.and(
+// 	Query.field("price").lessThan(50),
+// 	Query.field("flower").matches(Query.field("type").equalsValue(FlowerType.ROSE.name())))
+func main() {
+	_ = Query{
+		And: []Query{
+			{Field: "price", LessThan: Value{Int: 50}},
+			{Field: "flower", Matches: &Query{
+				Field:  "type",
+				Equals: Value{String: "foo"},
+			}},
+		},
+	}
+
+	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", vinyl.Metadata{
 		Descriptor: proto.FileDescriptor("tables.proto"),
-		Tables: []md.Table{{
+		Tables: []vinyl.Table{{
 			Name:       "User",
 			PrimaryKey: "id",
-			Indexes: []md.Index{{
+			Indexes: []vinyl.Index{{
 				Field:  "email",
 				Unique: true,
 			}},
@@ -35,9 +58,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	users := []User{}
-	log.Println(db.First(&user))
-	log.Println(db.All(&users))
+	queryResponse := User{}
+	if err := db.First(&queryResponse); err != nil {
+		log.Fatal(err)
+	}
+	if queryResponse.Id != "whatever" {
+		log.Fatal("I have failed me")
+	}
+	// users := []User{}
+	// log.Println(db.First(&user))
+	// log.Println(db.All(&users))
 	// c.Get("http://localhost:8090/start")
 	// c.Post("http://localhost:8090")
 

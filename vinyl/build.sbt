@@ -13,8 +13,10 @@ scalaVersion := "2.12.8"
 // It's possible to define many kinds of settings, such as:
 
 name := "scl"
-organization := "run.wasabi.fdb"
+organization := "run.embly.vinyl"
 version := "1.0"
+
+// mainClass in (Compile,run) := Some("run.embly.vinyl.main.Main")
 
 // Note, it's not required for you to define these three settings. These are
 // mostly only necessary if you intend to publish your library's binaries on a

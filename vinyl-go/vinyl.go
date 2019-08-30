@@ -13,16 +13,36 @@ import (
 	"reflect"
 
 	"github.com/embly/vinyl/vinyl-go/descriptor"
-	md "github.com/embly/vinyl/vinyl-go/metadata"
+	"github.com/embly/vinyl/vinyl-go/transport"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/publicsuffix"
 )
 
+// DB is an instance of a connection to the Record Layer database
 type DB struct {
 	httpClient *http.Client
 	hostname   string
+}
+
+// Table defines a Record Layer table
+type Table struct {
+	Name       string
+	PrimaryKey string
+	Indexes    []Index
+}
+
+// Index defines a Record Layer index
+type Index struct {
+	Field  string
+	Unique bool
+}
+
+// Metadata defines the proto file descriptor and related table and index data
+type Metadata struct {
+	Descriptor []byte
+	Tables     []Table
 }
 
 func newClient() *DB {
@@ -47,7 +67,7 @@ func newClient() *DB {
 }
 
 // Connect ...
-func Connect(connectionString string, metadata md.Metadata) (db *DB, err error) {
+func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 	db = newClient()
 	u, err := url.Parse(connectionString)
 	if err != nil {
@@ -64,7 +84,7 @@ func Connect(connectionString string, metadata md.Metadata) (db *DB, err error) 
 	}
 
 	password, _ := u.User.Password()
-	query := Query{
+	request := transport.Request{
 		Username: u.User.Username(),
 		Password: password,
 		Keyspace: u.Path,
@@ -72,10 +92,10 @@ func Connect(connectionString string, metadata md.Metadata) (db *DB, err error) 
 	tableNames := make([]string, len(metadata.Tables))
 	for i, t := range metadata.Tables {
 		tableNames[i] = t.Name
-		table := Table{
+		table := transport.Table{
 			Name: t.Name,
-			FieldOptions: map[string]*FieldOptions{
-				t.PrimaryKey: &FieldOptions{
+			FieldOptions: map[string]*transport.FieldOptions{
+				t.PrimaryKey: &transport.FieldOptions{
 					PrimaryKey: true,
 				},
 			},
@@ -83,15 +103,15 @@ func Connect(connectionString string, metadata md.Metadata) (db *DB, err error) 
 		for _, idx := range t.Indexes {
 			v := table.FieldOptions[idx.Field]
 			if v == nil {
-				v = &FieldOptions{}
+				v = &transport.FieldOptions{}
 			}
-			v.Index = &FieldOptions_IndexOption{
+			v.Index = &transport.FieldOptions_IndexOption{
 				Type:   "value",
 				Unique: idx.Unique,
 			}
 			table.FieldOptions[idx.Field] = v
 		}
-		query.Tables = append(query.Tables, &table)
+		request.Tables = append(request.Tables, &table)
 	}
 
 	b, err := descriptor.AddRecordTypeUnion(metadata.Descriptor, tableNames)
@@ -99,9 +119,9 @@ func Connect(connectionString string, metadata md.Metadata) (db *DB, err error) 
 		err = errors.Wrap(err, "error parsing descriptor")
 		return
 	}
-	query.FileDescriptor = b
+	request.FileDescriptor = b
 
-	err = db.sendQuery(query, "start")
+	_, err = db.sendRequest(request, "start")
 	return
 }
 
@@ -111,15 +131,35 @@ func (db *DB) Close() (err error) {
 	return nil
 }
 
-type DBQuery struct {
-	// placeholder
-}
-
-func (db *DB) First(msg proto.Message, query ...DBQuery) (err error) {
+func (db *DB) First(msg proto.Message, tmp ...string) (err error) {
+	query := transport.Query{
+		Filter: &transport.QueryComponent{
+			ComponentType: transport.QueryComponent_FIELD,
+			Field: &transport.Field{
+				Name: "email",
+				Value: &transport.Value{
+					String_:   "max@max.com",
+					ValueType: transport.Value_STRING,
+				},
+			},
+		},
+		RecordType: proto.MessageName(msg),
+	}
+	fmt.Println(query.RecordType)
+	request := transport.Request{
+		Query: &query,
+	}
+	respProto, err := db.sendRequest(request, "")
+	if err != nil {
+		return
+	}
+	if len(respProto.Records) > 0 {
+		return proto.Unmarshal(respProto.Records[0], msg)
+	}
 	return nil
 }
 
-func (db *DB) All(msgs interface{}, query ...DBQuery) (err error) {
+func (db *DB) All(msgs interface{}, query ...string) (err error) {
 	rv := reflect.ValueOf(msgs)
 	msgType := rv.Elem().Type().Elem()
 	val := reflect.New(msgType).Interface()
@@ -130,20 +170,20 @@ func (db *DB) All(msgs interface{}, query ...DBQuery) (err error) {
 
 // Insert ...
 func (db *DB) Insert(msg proto.Message) (err error) {
-
-	query := Query{}
+	request := transport.Request{}
 	b, err := proto.Marshal(msg)
 	if err != nil {
 		errors.Wrap(err, "error marshalling proto message")
 	}
-	query.Insertions = append(query.Insertions, &Insert{
+	request.Insertions = append(request.Insertions, &transport.Insert{
 		Table: proto.MessageName(msg),
 		Data:  b,
 	})
-	return db.sendQuery(query, "")
+	_, err = db.sendRequest(request, "")
+	return
 }
 
-func (db *DB) sendQuery(query Query, path string) (err error) {
+func (db *DB) sendRequest(query transport.Request, path string) (respProto transport.Response, err error) {
 	b, err := proto.Marshal(&query)
 	if err != nil {
 		return
@@ -157,21 +197,21 @@ func (db *DB) sendQuery(query Query, path string) (err error) {
 	))
 }
 
-func (db *DB) responseWrapper(resp *http.Response, err error) error {
+func (db *DB) responseWrapper(resp *http.Response, err error) (transport.Response, error) {
+	respProto := transport.Response{}
 	if err != nil {
-		return err
+		return respProto, err
 	}
 	b, _ := ioutil.ReadAll(resp.Body)
-	respProto := Response{}
 	if err := proto.Unmarshal(b, &respProto); err != nil {
-		return errors.Wrap(err, "error unmarshalling the database response")
+		return respProto, errors.Wrap(err, "error unmarshalling the database response")
 	}
 	if respProto.Error != "" {
-		return errors.New(respProto.Error)
+		return respProto, errors.New(respProto.Error)
 	}
 	// TODO: protobuf responses
 	if resp.StatusCode > 299 {
-		return errors.Errorf("Got error response from server: %d %s", resp.StatusCode, (b))
+		return respProto, errors.Errorf("Got error response from server: %d %s", resp.StatusCode, (b))
 	}
-	return nil
+	return respProto, nil
 }
