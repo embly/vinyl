@@ -6,6 +6,7 @@ import (
 	"log"
 
 	vinyl "github.com/embly/vinyl/vinyl-go"
+	"github.com/embly/vinyl/vinyl-go/qm"
 	proto "github.com/golang/protobuf/proto"
 )
 
@@ -59,7 +60,8 @@ func main() {
 	}
 
 	queryResponse := User{}
-	if err := db.First(&queryResponse); err != nil {
+	if err := db.First(&queryResponse,
+		qm.Field("email").Equals("max@max.com")); err != nil {
 		log.Fatal(err)
 	}
 	if queryResponse.Id != "whatever" {

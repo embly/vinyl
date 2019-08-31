@@ -12,3 +12,5 @@ The Record Layer already has record_metadata.proto as an extension to add all ne
 to a parsed protobuf record. Should likely pull out that logic and reimplement it in each language
 so that we can just use the same format everywhere. For now we're just going to define our own
 metadata (as a convenience), but that should probably change in the future.
+
+<!-- validate(Descriptors.Descriptor) must be called before calling eval(FDBRecordStoreBase, EvaluationContext, FDBRecord), or bad things may happen. -->

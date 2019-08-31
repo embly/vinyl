@@ -13,6 +13,7 @@ import (
 	"reflect"
 
 	"github.com/embly/vinyl/vinyl-go/descriptor"
+	"github.com/embly/vinyl/vinyl-go/qm"
 	"github.com/embly/vinyl/vinyl-go/transport"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -131,23 +132,33 @@ func (db *DB) Close() (err error) {
 	return nil
 }
 
-func (db *DB) First(msg proto.Message, tmp ...string) (err error) {
-	query := transport.Query{
-		Filter: &transport.QueryComponent{
-			ComponentType: transport.QueryComponent_FIELD,
-			Field: &transport.Field{
-				Name: "email",
-				Value: &transport.Value{
-					String_:   "max@max.com",
-					ValueType: transport.Value_STRING,
-				},
-			},
-		},
+func (db *DB) First(msg proto.Message, query qm.QueryComponent) (err error) {
+	qm.And()
+	// query := transport.Query{
+	// 	Filter: &transport.QueryComponent{
+	// 		ComponentType: transport.QueryComponent_FIELD,
+	// 		Field: &transport.Field{
+	// 			Name: "email",
+	// 			Value: &transport.Value{
+	// 				String_:   "max@max.com",
+	// 				ValueType: transport.Value_STRING,
+	// 			},
+	// 		},
+	// 	},
+	// 	RecordType: proto.MessageName(msg),
+	// }
+	qc, errs := query.QueryComponent()
+	if len(errs) != 0 {
+		// TODO: combine errors
+		return errs[0]
+	}
+	q := transport.Query{
+		Filter:     qc,
 		RecordType: proto.MessageName(msg),
 	}
-	fmt.Println(query.RecordType)
+	fmt.Println(q.RecordType)
 	request := transport.Request{
-		Query: &query,
+		Query: &q,
 	}
 	respProto, err := db.sendRequest(request, "")
 	if err != nil {

@@ -28,8 +28,7 @@ message QueryComponent {
     FIELD = 3;
   }
   ComponentType component_type = 3;
-  QueryComponent not = 4;
-  Field field = 5;
+  Field field = 4;
 }
 
 
