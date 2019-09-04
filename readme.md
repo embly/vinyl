@@ -14,3 +14,5 @@ so that we can just use the same format everywhere. For now we're just going to 
 metadata (as a convenience), but that should probably change in the future.
 
 <!-- validate(Descriptors.Descriptor) must be called before calling eval(FDBRecordStoreBase, EvaluationContext, FDBRecord), or bad things may happen. -->
+
+### Notes from the paper and elsewhere

@@ -133,20 +133,6 @@ func (db *DB) Close() (err error) {
 }
 
 func (db *DB) First(msg proto.Message, query qm.QueryComponent) (err error) {
-	qm.And()
-	// query := transport.Query{
-	// 	Filter: &transport.QueryComponent{
-	// 		ComponentType: transport.QueryComponent_FIELD,
-	// 		Field: &transport.Field{
-	// 			Name: "email",
-	// 			Value: &transport.Value{
-	// 				String_:   "max@max.com",
-	// 				ValueType: transport.Value_STRING,
-	// 			},
-	// 		},
-	// 	},
-	// 	RecordType: proto.MessageName(msg),
-	// }
 	qc, errs := query.QueryComponent()
 	if len(errs) != 0 {
 		// TODO: combine errors
@@ -170,7 +156,7 @@ func (db *DB) First(msg proto.Message, query qm.QueryComponent) (err error) {
 	return nil
 }
 
-func (db *DB) All(msgs interface{}, query ...string) (err error) {
+func (db *DB) All(msgs interface{}, query qm.QueryComponent) (err error) {
 	rv := reflect.ValueOf(msgs)
 	msgType := rv.Elem().Type().Elem()
 	val := reflect.New(msgType).Interface()

@@ -1,3 +1,9 @@
+// Package qm provides query building funcitonality for vinyl-go.
+//     db.First(And(
+//        Field("price").LessThan(50),
+//        Field("flower").Matches(Field("type").Equals("ROSE")),
+//     ))
+//
 package qm
 
 // And(Field("price").LessThan(50), Field("flower").Matches(Field("type").Equals("ROSE")))

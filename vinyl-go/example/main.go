@@ -59,6 +59,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	user2 := User{
+		Id:    "whoever",
+		Email: "max@max.com",
+	}
+	if err := db.Insert(&user2); err != nil {
+		log.Fatal(err)
+	}
+
 	queryResponse := User{}
 	if err := db.First(&queryResponse,
 		qm.Field("email").Equals("max@max.com")); err != nil {
@@ -67,6 +75,13 @@ func main() {
 	if queryResponse.Id != "whatever" {
 		log.Fatal("I have failed me")
 	}
+
+	users := []User{}
+	if err := db.All(&users,
+		qm.Field("email").Equals("max@max.com")); err != nil {
+		log.Fatal(err)
+	}
+
 	// users := []User{}
 	// log.Println(db.First(&user))
 	// log.Println(db.All(&users))
