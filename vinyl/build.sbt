@@ -16,7 +16,7 @@ name := "scl"
 organization := "run.embly.vinyl"
 version := "1.0"
 
-// mainClass in (Compile,run) := Some("run.embly.vinyl.main.Main")
+// mainClass in (Compile,run) := Some("run.embly.vinyl.main.Main.VinylServer")
 
 // Note, it's not required for you to define these three settings. These are
 // mostly only necessary if you intend to publish your library's binaries on a
@@ -79,12 +79,9 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.7.74.0"
 libraryDependencies += "org.scala-lang.modules" % "scala-java8-compat_2.12" % "0.9.0"
 
-libraryDependencies += "com.typesafe.akka" %% "akka-stream" % "2.5.23"
-libraryDependencies += "com.typesafe.akka" %% "akka-http" % "10.1.9"
-// https://mvnrepository.com/artifact/com.typesafe.akka/akka-http2-support
-libraryDependencies += "com.typesafe.akka" %% "akka-http2-support" % "10.1.9"
+libraryDependencies += "io.grpc" % "grpc-netty" % scalapb.compiler.Version.grpcJavaVersion
+libraryDependencies += "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion
 
-libraryDependencies += "fr.davit" %% "akka-http-scalapb" % "0.2.1"
 PB.targets in Compile := Seq(
   scalapb.gen() -> (sourceManaged in Compile).value
 )

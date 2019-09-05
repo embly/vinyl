@@ -57,6 +57,7 @@ class MainTest extends FunSuite {
       )
     )
 
+
     var query = transport.Query(recordType="Order", filter = Some(transport.QueryComponent(
       children = Array(
         transport.QueryComponent(

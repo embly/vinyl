@@ -8,31 +8,24 @@ import com.apple.foundationdb.record.query.RecordQuery
 import com.apple.foundationdb.record.query.expressions.{Query, QueryComponent}
 import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.provider.foundationdb.FDBRecordStore
-import com.apple.foundationdb.tuple.Tuple
-import com.apple.foundationdb.record.provider.foundationdb.FDBStoredRecord
-import com.github.os72.protobuf.dynamic.DynamicSchema
-import com.github.os72.protobuf.dynamic.MessageDefinition
-import com.google.protobuf.{ByteString, Message}
+import com.google.protobuf.{ByteString}
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
 import com.google.protobuf.DynamicMessage
-import akka.http.scaladsl.HttpConnectionContext
-import akka.actor.ActorSystem
-import akka.http.scaladsl.Http2
-import akka.http.scaladsl.server.Route
-import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
-import akka.http.scaladsl.model.headers.{HttpCookie, HttpCookiePair}
-
-import scala.concurrent.{Await, Future}
-import akka.stream.ActorMaterializer
-
+import io.grpc.{Server, ServerBuilder}
+import io.grpc.stub.StreamObserver
 import scala.collection.JavaConverters._
-import scala.concurrent.duration._
 import scala.collection.mutable.HashMap
-import scala.concurrent.ExecutionContext
-import fr.davit.akka.http.scaladsl.marshallers.scalapb.ScalaPBBinarySupport
+import scala.concurrent.{ExecutionContext, Future}
 import vinyl.transport
+import vinyl.transport.{
+  VinylGrpc,
+  LoginRequest,
+  LoginResponse,
+  Request,
+  Response
+}
+import java.util.logging.Logger
 
 class Session(ks: String, descriptorBytes: ByteString) {
 
@@ -54,52 +47,103 @@ class Session(ks: String, descriptorBytes: ByteString) {
 
 }
 
-object Main extends App with ScalaPBBinarySupport {
+object VinylServer {
 
-  def wrapQueries(query: Seq[transport.QueryComponent]): java.util.List[QueryComponent] = {
+  private val logger = Logger.getLogger(classOf[VinylServer].getName)
+
+  def main(args: Array[String]): Unit = {
+    val server = new VinylServer(ExecutionContext.global)
+    server.start()
+    server.blockUntilShutdown()
+  }
+
+  private val port = 8090
+}
+
+class VinylServer(executionContext: ExecutionContext) { self =>
+  private[this] var server: Server = null
+
+  private def start(): Unit = {
+    server = ServerBuilder
+      .forPort(VinylServer.port)
+      .addService(VinylGrpc.bindService(new VinylImpl, executionContext))
+      .build
+      .start
+    VinylServer.logger.info("Server started, listening on " + VinylServer.port)
+    sys.addShutdownHook {
+
+      System.err.println(
+        "*** shutting down gRPC server since JVM is shutting down"
+      )
+      self.stop()
+      System.err.println("*** server shut down")
+    }
+  }
+
+  def wrapQueries(
+      query: Seq[transport.QueryComponent]
+  ): java.util.List[QueryComponent] = {
     query.map(qc => wrapQuery(qc)).asJava
   }
+
   def wrapValue(value: transport.Value): Any = {
     return value.valueType match {
       case transport.Value.ValueTypeEnum.DOUBLE => value.double
-      case transport.Value.ValueTypeEnum.FLOAT => value.float
-      case transport.Value.ValueTypeEnum.INT32 => value.int32
-      case transport.Value.ValueTypeEnum.INT64 => value.int64
+      case transport.Value.ValueTypeEnum.FLOAT  => value.float
+      case transport.Value.ValueTypeEnum.INT32  => value.int32
+      case transport.Value.ValueTypeEnum.INT64  => value.int64
       case transport.Value.ValueTypeEnum.SINT32 => value.sint32
       case transport.Value.ValueTypeEnum.SINT64 => value.sint64
-      case transport.Value.ValueTypeEnum.BOOL => value.bool
+      case transport.Value.ValueTypeEnum.BOOL   => value.bool
       case transport.Value.ValueTypeEnum.STRING => value.string
-      case transport.Value.ValueTypeEnum.BYTES => value.bytes
+      case transport.Value.ValueTypeEnum.BYTES  => value.bytes
+      case _                                    => throw new Exception("no match")
 
     }
   }
+
   def wrapField(field: transport.Field): QueryComponent = {
     var queryField = Query.field(field.name);
     return field.componentType match {
-      case transport.Field.ComponentType.EQUALS => queryField.equalsValue(wrapValue(field.value.get))
-      case transport.Field.ComponentType.GREATER_THAN => queryField.greaterThan(wrapValue(field.value.get))
-      case transport.Field.ComponentType.LESS_THAN => queryField.lessThan(wrapValue(field.value.get))
-      case transport.Field.ComponentType.EMPTY => queryField.isEmpty()
+      case transport.Field.ComponentType.EQUALS =>
+        queryField.equalsValue(wrapValue(field.value.get))
+      case transport.Field.ComponentType.GREATER_THAN =>
+        queryField.greaterThan(wrapValue(field.value.get))
+      case transport.Field.ComponentType.LESS_THAN =>
+        queryField.lessThan(wrapValue(field.value.get))
+      case transport.Field.ComponentType.EMPTY     => queryField.isEmpty()
       case transport.Field.ComponentType.NOT_EMPTY => queryField.notEmpty()
-      case transport.Field.ComponentType.IS_NULL => queryField.isNull()
-      case transport.Field.ComponentType.MATCHES => queryField.matches(wrapQuery(field.matches.get))
+      case transport.Field.ComponentType.IS_NULL   => queryField.isNull()
+      case transport.Field.ComponentType.MATCHES =>
+        queryField.matches(wrapQuery(field.matches.get))
+      case _ => throw new Exception("no match")
+
     }
   }
+
   def wrapQuery(query: transport.QueryComponent): QueryComponent = {
     val children: Seq[transport.QueryComponent] = query.children
     return query.componentType match {
-      case transport.QueryComponent.ComponentType.AND => Query.and(wrapQueries(children))
-      case transport.QueryComponent.ComponentType.OR => Query.or(wrapQueries(children))
-      case transport.QueryComponent.ComponentType.NOT => Query.not(wrapQuery(query.child.get)) // TODO: check for null
-      case transport.QueryComponent.ComponentType.FIELD => wrapField(query.field.get)
+      case transport.QueryComponent.ComponentType.AND =>
+        Query.and(wrapQueries(children))
+      case transport.QueryComponent.ComponentType.OR =>
+        Query.or(wrapQueries(children))
+      case transport.QueryComponent.ComponentType.NOT =>
+        Query.not(wrapQuery(query.child.get)) // TODO: check for null
+      case transport.QueryComponent.ComponentType.FIELD =>
+        wrapField(query.field.get)
+      case _ => throw new Exception("no match")
+
     }
   }
 
-
   def buildQuery(query: transport.Query): RecordQuery = {
-    RecordQuery.newBuilder().setRecordType(query.recordType).setFilter(wrapQuery(query.filter.get)).build()
+    RecordQuery
+      .newBuilder()
+      .setRecordType(query.recordType)
+      .setFilter(wrapQuery(query.filter.get))
+      .build()
   }
-
 
   def randomString(length: Int) = {
     val chars = ('a' to 'z') ++ ('0' to '9')
@@ -111,222 +155,144 @@ object Main extends App with ScalaPBBinarySupport {
     sb.toString
   }
 
-  implicit val actorSystem: ActorSystem = ActorSystem("test")
-  implicit val actorMaterializer: ActorMaterializer = ActorMaterializer()
   implicit val ec = ExecutionContext.global
 
   val activeSessions: HashMap[String, Session] = HashMap()
-
-  def isActiveSession(token: Option[HttpCookiePair]): Boolean = {
-    if (token.isEmpty) {
-      return false
-    }
-    activeSessions.contains(token.get.value)
-  }
-
-  val routes: Route = entity(as[vinyl.transport.Request]) {
-    request: vinyl.transport.Request =>
-      {
-        concat(
-          path("start") {
-            val descriptorBytes: ByteString = request.fileDescriptor
-            val session = new Session(
-              request.keyspace,
-              descriptorBytes
-            )
-            println(s"descriptor ${descriptorBytes.toByteArray.mkString(" ")}")
-            val tables: Seq[vinyl.transport.Table] = request.tables
-            for (table <- tables) {
-              val recordType = session.metadata.getRecordType(table.name)
-
-              val fieldOptions: Map[String, vinyl.transport.FieldOptions] =
-                table.fieldOptions
-
-              for ((name, fieldOption) <- fieldOptions) {
-                val idx: Option[vinyl.transport.FieldOptions.IndexOption] =
-                  fieldOption.index
-
-                if (fieldOption.primaryKey) {
-                  println(s"Adding primary key '$name' to '${table.name}'")
-                  recordType.setPrimaryKey(Key.Expressions.field(name))
-                } else if (idx.isDefined && idx.get.`type` == "value") {
-                  println(s"Adding index to '${table.name}' for field '$name'")
-                  session.metadata.addIndex(
-                    table.name: String,
-                    new Index("todoIndex", Key.Expressions.field(name))
-                  )
-                }
-              }
-            }
-
-            val token = randomString(32)
-            println(
-              s"Starting new session with token: ${token} ${request.keyspace}"
-            )
-
-
-            // TODO: auth values and session
-            activeSessions += (token -> session)
-            setCookie(HttpCookie("vinyl-token", value = token)) {
-              complete(vinyl.transport.Response())
-            }
-          },
-          optionalCookie("vinyl-token") { cookie =>
-            authorize(isActiveSession(cookie)) {
-              val session = activeSessions(cookie.get.value)
-
-              println(s"Got authed request")
-
-              val context = db.openContext()
-              val keySpace = new KeySpace(
-                new KeySpaceDirectory(
-                  session.keySpace,
-                  KeySpaceDirectory.KeyType.STRING,
-                  session.keySpace
-                )
-              )
-
-              val keyspacePath = keySpace.path(session.keySpace)
-              for (insertion <- (request.insertions: Seq[vinyl.transport.Insert])) {
-                val data: ByteString = insertion.data
-
-                println(
-                  s"found insertion ${insertion.table} ${data.toByteArray.mkString(" ")}"
-                )
-
-                val descriptor = session.messageDescriptorMap(insertion.table);
-                val builder = DynamicMessage.newBuilder(descriptor);
-                builder.mergeFrom(insertion.data: ByteString).build()
-                  println(descriptor.getFields)
-                val resp = FDBRecordStore
-                  .newBuilder()
-                  .setMetaDataProvider(session.metadata)
-                  .setContext(context)
-                  .setKeySpacePath(keyspacePath)
-                  .createOrOpen()
-                  .saveRecord(
-                    builder.mergeFrom(insertion.data: ByteString).build()
-                  )
-//
-                println(s"insertion request response${resp}")
-
-              }
-
-              var response = vinyl.transport.Response()
-              val query: Option[vinyl.transport.Query] = request.query
-
-              if (query.isDefined) {
-                println("processing query")
-                val query: vinyl.transport.Query = request.getQuery
-                val recordQuery = buildQuery(query)
-                val store = FDBRecordStore
-                  .newBuilder()
-                  .setMetaDataProvider(session.metadata)
-                  .setContext(context)
-                  .setKeySpacePath(keyspacePath)
-                  .createOrOpen()
-                val cursor = store.executeQuery(recordQuery)
-                cursor.forEach(msg => {
-                  response = response.addRecords(ByteString.copyFrom(msg.getStoredRecord.getRecord.toByteArray))
-                })
-              }
-
-              context.commit()
-              context.close()
-
-              complete(response)
-            }
-          }
-        )
-      }
-  }
-
-  val asyncHandler: HttpRequest => Future[HttpResponse] =
-    Route.asyncHandler(routes)
-
-  val http2Future = Http2().bindAndHandleAsync(
-    asyncHandler,
-    interface = "0.0.0.0",
-    port = 8090,
-    connectionContext = HttpConnectionContext()
-  )
-
-  val http2 = Await.result(http2Future, Duration.Inf)
-  println(
-    "HTTP/2 server is listening on http://localhost:8090 or https://localhost:8090"
-  )
-
   val db = FDBDatabaseFactory
     .instance()
     .getDatabase()
 
-  println(s"Hello, World! $db")
+  private def stop(): Unit = {
+    if (server != null) {
+      server.shutdown()
+    }
+  }
 
-  val schemaBuilder = DynamicSchema.newBuilder()
-  schemaBuilder.setName("hi.proto")
-  schemaBuilder.addMessageDefinition(
-    MessageDefinition
-      .newBuilder("Value")
-      .addField("required", "int64", "id", 1)
-      .addField("optional", "string", "email", 3)
-      .build()
-  )
+  private def blockUntilShutdown(): Unit = {
+    if (server != null) {
+      server.awaitTermination()
+    }
+  }
 
-  schemaBuilder.addMessageDefinition(
-    MessageDefinition
-      .newBuilder("RecordTypeUnion")
-      .addField("optional", "Value", "_Value", 1)
-      .build()
-  )
-  val schema = schemaBuilder.build()
+  private class VinylImpl extends VinylGrpc.Vinyl {
+    override def login(req: LoginRequest) = {
+      println(s"got login request $LoginRequest $activeSessions")
+      val descriptorBytes: ByteString = req.fileDescriptor
+      val session = new Session(
+        req.keyspace,
+        descriptorBytes
+      )
 
-  val keySpace = new KeySpace(
-    new KeySpaceDirectory("foo", KeySpaceDirectory.KeyType.STRING, "foo")
-  )
-  val keyspacePath = keySpace.path("foo")
-  val builder = RecordMetaData.newBuilder()
-  builder.setRecords(schema.fileDescMap.get("hi.proto"))
-  builder.getRecordType("Value").setPrimaryKey(Key.Expressions.field("id"))
+      val tables: Seq[vinyl.transport.Table] = req.tables
+      for (table <- tables) {
+        val recordType = session.metadata.getRecordType(table.name)
 
-  val msgBuilder = schema.newMessageBuilder("Value")
-  val msgDesc = msgBuilder.getDescriptorForType
+        val fieldOptions: Map[String, vinyl.transport.FieldOptions] =
+          table.fieldOptions
 
-  val context = db.openContext()
+        for ((name, fieldOption) <- fieldOptions) {
+          val idx: Option[vinyl.transport.FieldOptions.IndexOption] =
+            fieldOption.index
 
-  val id: java.lang.Long = 4: Long
+          if (fieldOption.primaryKey) {
+            println(s"Adding primary key '$name' to '${table.name}'")
+            recordType.setPrimaryKey(Key.Expressions.field(name))
+          } else if (idx.isDefined && idx.get.`type` == "value") {
+            println(s"Adding index to '${table.name}' for field '$name'")
+            session.metadata.addIndex(
+              table.name: String,
+              new Index("todoIndex", Key.Expressions.field(name))
+            )
+          }
+        }
+      }
 
-  val resp = FDBRecordStore
-    .newBuilder()
-    .setMetaDataProvider(builder)
-    .setContext(context)
-    .setKeySpacePath(keyspacePath)
-    .createOrOpen()
-    .saveRecord(
-      msgBuilder
-        .setField(msgDesc.findFieldByName("id"), id)
-        .setField(msgDesc.findFieldByName("email"), "hi")
-        .build()
-    )
-  println(resp)
+      val token = randomString(32)
+      println(
+        s"Starting new session with token: ${token} ${req.keyspace}"
+      )
 
-  context.commit()
-  context.close()
+      // TODO: auth values and session
+      activeSessions += (token -> session)
+      val reply = LoginResponse(token = token)
+      Future.successful(reply)
+    }
+    override def query(
+        req: Request,
+        responseObserver: StreamObserver[Response]
+    ) = {
+      if (!activeSessions.contains(req.token)) {
+        responseObserver.onNext(Response(error = "auth token is invalid"))
+        responseObserver.onCompleted()
+      } else {
+        val session = activeSessions(req.token)
 
+        println(s"Got authed request")
 
-  val nextContext = db.openContext()
+        val context = db.openContext()
+        val keySpace = new KeySpace(
+          new KeySpaceDirectory(
+            session.keySpace,
+            KeySpaceDirectory.KeyType.STRING,
+            session.keySpace
+          )
+        )
 
-  val storedRecord: FDBStoredRecord[Message] = FDBRecordStore
-    .newBuilder()
-    .setMetaDataProvider(builder)
-    .setContext(nextContext)
-    .setKeySpacePath(keyspacePath)
-    .createOrOpen()
-    .loadRecord(Tuple.from(id))
-  nextContext.close()
-  println(storedRecord)
+        val keyspacePath = keySpace.path(session.keySpace)
+        for (insertion <- (req.insertions: Seq[vinyl.transport.Insert])) {
+          val data: ByteString = insertion.data
 
-  val msgBldr = schema.newMessageBuilder("Value")
-  val value = msgBldr.mergeFrom(storedRecord.getRecord).build()
-  println(value)
+          println(
+            s"found insertion ${insertion.table} ${data.toByteArray.mkString(" ")}"
+          )
 
+          val descriptor = session.messageDescriptorMap(insertion.table);
+          val builder = DynamicMessage.newBuilder(descriptor);
+          builder.mergeFrom(insertion.data: ByteString).build()
+          println(descriptor.getFields)
+          val resp = FDBRecordStore
+            .newBuilder()
+            .setMetaDataProvider(session.metadata)
+            .setContext(context)
+            .setKeySpacePath(keyspacePath)
+            .createOrOpen()
+            .saveRecord(
+              builder.mergeFrom(insertion.data: ByteString).build()
+            )
+          //
+          println(s"insertion request response${resp}")
+
+        }
+
+        var response = Response()
+
+        val query: Option[vinyl.transport.Query] = req.query
+
+        if (query.isDefined) {
+          println("processing query")
+          val query: vinyl.transport.Query = req.getQuery
+          val recordQuery = buildQuery(query)
+          val store = FDBRecordStore
+            .newBuilder()
+            .setMetaDataProvider(session.metadata)
+            .setContext(context)
+            .setKeySpacePath(keyspacePath)
+            .createOrOpen()
+          val cursor = store.executeQuery(recordQuery)
+          cursor.forEach(msg => {
+            response = response.addRecords(
+              ByteString.copyFrom(msg.getStoredRecord.getRecord.toByteArray)
+            )
+          })
+        }
+
+        context.commit()
+        context.close()
+
+        println(s"got query request $req")
+        responseObserver.onNext(response)
+        responseObserver.onCompleted()
+      }
+    }
+  }
 }

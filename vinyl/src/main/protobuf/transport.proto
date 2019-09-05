@@ -4,18 +4,40 @@ option go_package = "transport";
 option java_package = "vinyl";
 
 message Request {
-  string username = 1;
-  string password = 2;
-  string keyspace = 3;
-  bytes file_descriptor = 4;
-  repeated Table tables = 5;
+  string token = 1;
   repeated Insert insertions = 6;
   Query query = 7;
 }
 
+message Response {
+  string error = 1;
+  repeated bytes records = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string keyspace = 3; 
+  bytes file_descriptor = 4;
+  repeated Table tables = 5;
+}
+
+
+message LoginResponse { 
+  string token = 1; 
+  string error = 2;
+}
+
+service Vinyl {
+  // Sends a greeting
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Query(Request) returns (stream Response) {}
+}
+
 message Query {
-  string record_type = 1;
-  QueryComponent filter = 2;
+  string token = 1;
+  string record_type = 2;
+  QueryComponent filter = 3;
 }
 
 message QueryComponent {
@@ -30,7 +52,6 @@ message QueryComponent {
   ComponentType component_type = 3;
   Field field = 4;
 }
-
 
 message Field {
   enum ComponentType {
@@ -98,9 +119,4 @@ message FieldOptions {
   IndexOption index = 3;
 }
 
-message Response {
-  string error = 1;
-  repeated bytes records = 2;
-}
 
-// message RecordTypeUnion { Query _Query = 1; }

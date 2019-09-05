@@ -1,14 +1,8 @@
 package vinyl
 
 import (
-	"bytes"
-	"crypto/tls"
+	"context"
 	"fmt"
-	"io/ioutil"
-	"log"
-	"net"
-	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"reflect"
 
@@ -17,14 +11,15 @@ import (
 	"github.com/embly/vinyl/vinyl-go/transport"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"golang.org/x/net/http2"
-	"golang.org/x/net/publicsuffix"
+	"google.golang.org/grpc"
 )
 
 // DB is an instance of a connection to the Record Layer database
 type DB struct {
-	httpClient *http.Client
-	hostname   string
+	client   transport.VinylClient
+	grpcConn *grpc.ClientConn
+	hostname string
+	token    string
 }
 
 // Table defines a Record Layer table
@@ -46,46 +41,35 @@ type Metadata struct {
 	Tables     []Table
 }
 
-func newClient() *DB {
-	jar, err := cookiejar.New(&cookiejar.Options{PublicSuffixList: publicsuffix.List})
-	if err != nil {
-		log.Fatal(err)
-	}
-	return &DB{
-		httpClient: &http.Client{
-			Jar: jar,
-			Transport: &http2.Transport{
-				// So http2.Transport doesn't complain the URL scheme isn't 'https'
-				AllowHTTP: true,
-				// Pretend we are dialing a TLS endpoint.
-				// Note, we ignore the passed tls.Config
-				DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
-					return net.Dial(network, addr)
-				},
-			},
-		},
-	}
-}
-
 // Connect ...
 func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
-	db = newClient()
 	u, err := url.Parse(connectionString)
 	if err != nil {
 		return
 	}
-	db.hostname = u.Hostname()
-	if u.Port() != "" {
-		db.hostname += ":" + u.Port()
-	}
-
 	if u.Scheme != "vinyl" {
 		err = errors.Errorf("Connection url has incorrect scheme value '%s', should be vinyl://", u.Scheme)
 		return
 	}
 
+	db = &DB{}
+	db.hostname = u.Hostname()
+	if u.Port() != "" {
+		db.hostname += ":" + u.Port()
+	}
+
+	conn, err := grpc.Dial(db.hostname, grpc.WithInsecure())
+	if err != nil {
+		return
+	}
+	client := transport.NewVinylClient(conn)
+	db = &DB{
+		client:   client,
+		grpcConn: conn,
+	}
+
 	password, _ := u.User.Password()
-	request := transport.Request{
+	loginRequest := transport.LoginRequest{
 		Username: u.User.Username(),
 		Password: password,
 		Keyspace: u.Path,
@@ -112,7 +96,7 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 			}
 			table.FieldOptions[idx.Field] = v
 		}
-		request.Tables = append(request.Tables, &table)
+		loginRequest.Tables = append(loginRequest.Tables, &table)
 	}
 
 	b, err := descriptor.AddRecordTypeUnion(metadata.Descriptor, tableNames)
@@ -120,15 +104,19 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		err = errors.Wrap(err, "error parsing descriptor")
 		return
 	}
-	request.FileDescriptor = b
-
-	_, err = db.sendRequest(request, "start")
+	loginRequest.FileDescriptor = b
+	resp, err := client.Login(context.Background(), &loginRequest)
+	if resp.Error != "" {
+		err = errors.New(resp.Error)
+		return
+	}
+	db.token = resp.Token
 	return
 }
 
 // Close ...
 func (db *DB) Close() (err error) {
-	db.httpClient.CloseIdleConnections()
+	db.grpcConn.Close()
 	return nil
 }
 
@@ -180,35 +168,18 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 	return
 }
 
-func (db *DB) sendRequest(query transport.Request, path string) (respProto transport.Response, err error) {
-	b, err := proto.Marshal(&query)
+func (db *DB) sendRequest(query transport.Request, path string) (respProto *transport.Response, err error) {
+	query.Token = db.token
+	queryClient, err := db.client.Query(context.Background(), &query)
 	if err != nil {
 		return
 	}
-
-	fmt.Println(proto.Unmarshal(b, &query))
-	return db.responseWrapper(db.httpClient.Post(
-		fmt.Sprintf("http://%s/%s", db.hostname, path),
-		"application/protobuf",
-		bytes.NewBuffer(b),
-	))
-}
-
-func (db *DB) responseWrapper(resp *http.Response, err error) (transport.Response, error) {
-	respProto := transport.Response{}
+	resp, err := queryClient.Recv()
 	if err != nil {
-		return respProto, err
+		return
 	}
-	b, _ := ioutil.ReadAll(resp.Body)
-	if err := proto.Unmarshal(b, &respProto); err != nil {
-		return respProto, errors.Wrap(err, "error unmarshalling the database response")
+	if resp.Error != "" {
+		err = errors.New(resp.Error)
 	}
-	if respProto.Error != "" {
-		return respProto, errors.New(respProto.Error)
-	}
-	// TODO: protobuf responses
-	if resp.StatusCode > 299 {
-		return respProto, errors.Errorf("Got error response from server: %d %s", resp.StatusCode, (b))
-	}
-	return respProto, nil
+	return resp, err
 }
