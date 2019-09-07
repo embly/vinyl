@@ -3,28 +3,24 @@ package main
 import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpace
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpaceDirectory
+import com.apple.foundationdb;
 import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder}
 import com.apple.foundationdb.record.query.RecordQuery
 import com.apple.foundationdb.record.query.expressions.{Query, QueryComponent}
 import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.provider.foundationdb.FDBRecordStore
-import com.google.protobuf.{ByteString}
+import com.google.protobuf.ByteString
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
 import com.google.protobuf.DynamicMessage
 import io.grpc.{Server, ServerBuilder}
 import io.grpc.stub.StreamObserver
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.concurrent.{ExecutionContext, Future}
 import vinyl.transport
-import vinyl.transport.{
-  VinylGrpc,
-  LoginRequest,
-  LoginResponse,
-  Request,
-  Response
-}
+import vinyl.transport.{ExecuteProperties, LoginRequest, LoginResponse, Request, Response, VinylGrpc}
 import java.util.logging.Logger
 
 class Session(ks: String, descriptorBytes: ByteString) {
@@ -136,13 +132,57 @@ class VinylServer(executionContext: ExecutionContext) { self =>
 
     }
   }
-
-  def buildQuery(query: transport.Query): RecordQuery = {
-    RecordQuery
+  def buildQuery(recordQuery: transport.RecordQuery): RecordQuery = {
+    var builder = RecordQuery
       .newBuilder()
-      .setRecordType(query.recordType)
-      .setFilter(wrapQuery(query.filter.get))
-      .build()
+    if (recordQuery.filter.isDefined) {
+      builder.setFilter(wrapQuery(recordQuery.filter.get))
+    }
+    builder.setRecordType(recordQuery.recordType)
+    builder.build()
+  }
+  def convertExecuteProperties(maybeExecuteProperties: Option[transport.ExecuteProperties]): Option[foundationdb.record.ExecuteProperties] = {
+    maybeExecuteProperties match {
+      case Some(executeProperties) =>
+        if (executeProperties.skip == 0 && executeProperties.limit == 0) {
+          None
+        } else {
+          var epBuilder = foundationdb.record.ExecuteProperties.newBuilder()
+          if (executeProperties.skip != 0) {
+            epBuilder.setSkip(executeProperties.skip)
+          }
+          if (executeProperties.limit != 0) {
+            epBuilder.setReturnedRowLimit(executeProperties.limit)
+          }
+          println(s"LIMIT IS ${executeProperties.limit}")
+          Some(epBuilder.build())
+        }
+      case None => None
+    }
+  }
+  def recordQuery(store: FDBRecordStore, query: transport.Query): Response = {
+    var response = Response()
+    val recordQueryProto: transport.RecordQuery = query.recordQuery.get
+    val recordQuery = buildQuery(recordQueryProto)
+    val cursor = convertExecuteProperties(query.executeProperties) match {
+      case Some(executeProperties) => store.executeQuery(recordQuery, null, executeProperties)
+      case None => store.executeQuery(recordQuery)
+    }
+
+    var msg = cursor.onNext().get
+    while (msg.hasNext) {
+      response = response.addRecords(
+        ByteString.copyFrom(msg.get.getStoredRecord.getRecord.toByteArray)
+      )
+      println(s"got cursor message $msg ${msg.get.getStoredRecord.getRecord} $response")
+      msg = cursor.onNext().get
+    }
+    response
+  }
+  def processQuery(store: FDBRecordStore, query: transport.Query): Response = {
+    query.queryType match {
+      case transport.Query.QueryType.RECORD_QUERY => recordQuery(store, query)
+    }
   }
 
   def randomString(length: Int) = {
@@ -219,11 +259,9 @@ class VinylServer(executionContext: ExecutionContext) { self =>
     }
     override def query(
         req: Request,
-        responseObserver: StreamObserver[Response]
     ) = {
       if (!activeSessions.contains(req.token)) {
-        responseObserver.onNext(Response(error = "auth token is invalid"))
-        responseObserver.onCompleted()
+        Future.successful(Response(error = "auth token is invalid"))
       } else {
         val session = activeSessions(req.token)
 
@@ -272,26 +310,18 @@ class VinylServer(executionContext: ExecutionContext) { self =>
         if (query.isDefined) {
           println("processing query")
           val query: vinyl.transport.Query = req.getQuery
-          val recordQuery = buildQuery(query)
           val store = FDBRecordStore
             .newBuilder()
             .setMetaDataProvider(session.metadata)
             .setContext(context)
             .setKeySpacePath(keyspacePath)
             .createOrOpen()
-          val cursor = store.executeQuery(recordQuery)
-          cursor.forEach(msg => {
-            response = response.addRecords(
-              ByteString.copyFrom(msg.getStoredRecord.getRecord.toByteArray)
-            )
-            println(s"got cursor message $msg ${msg.getStoredRecord.getRecord} $response")
-          })
+          response = processQuery(store, query)
         }
-
         context.commit()
         context.close()
         println(s"got query request $req $response")
-        responseObserver.onNext(response)
+        Future.successful(response)
       }
     }
   }

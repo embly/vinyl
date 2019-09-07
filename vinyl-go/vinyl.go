@@ -123,38 +123,49 @@ func (db *DB) Close() (err error) {
 	return nil
 }
 
-func (db *DB) sendQuery(recordType string, query qm.QueryComponent) (respProto *transport.Response, err error) {
-	qc, errs := query.QueryComponent()
-	if len(errs) != 0 {
-		// TODO: combine errors
-		err = errs[0]
-		return
-	}
-	q := transport.Query{
-		Filter:     qc,
+func (db *DB) executeQuery(recordType string, query qm.QueryComponent, queryProperty qm.QueryProperty) (respProto *transport.Response, err error) {
+	rq := transport.RecordQuery{
 		RecordType: recordType,
 	}
-	request := transport.Request{
-		Query: &q,
+	if qc, ok := query.(qm.QueryComponent); ok {
+		filter, errs := qc.QueryComponent()
+		if len(errs) != 0 {
+			// TODO: combine errors
+			err = errs[0]
+			return
+		}
+		rq.Filter = filter
 	}
+	request := transport.Request{
+		Query: &transport.Query{
+			QueryType: transport.Query_RECORD_QUERY,
+			ExecuteProperties: &transport.ExecuteProperties{
+				Limit: int32(queryProperty.Limit),
+				Skip:  int32(queryProperty.Skip),
+			},
+			RecordQuery: &rq,
+		},
+	}
+	fmt.Println(request)
 	return db.sendRequest(request, "")
 }
 
-// First ...
-func (db *DB) First(msg proto.Message, query qm.QueryComponent) (err error) {
-	respProto, err := db.sendQuery(proto.MessageName(msg), query)
-	if err != nil {
-		return
-	}
-	fmt.Println(respProto.Records, err)
-	if len(respProto.Records) > 0 {
-		return proto.Unmarshal(respProto.Records[0], msg)
-	}
-	return nil
+func (db *DB) LoadRecord(msg proto.Message, pk interface{}) {
+
 }
 
-// All ...
-func (db *DB) All(msgs interface{}, query qm.QueryComponent) (err error) {
+// ExecuteQuery ...
+func (db *DB) ExecuteQuery(msgs interface{}, query qm.QueryComponent, queryProperites ...qm.QueryProperty) (err error) {
+	queryProperty := qm.QueryProperty{}
+	for _, qp := range queryProperites {
+		if qp.Skip != 0 {
+			queryProperty.Skip = qp.Skip
+		}
+		if qp.Limit != 0 {
+			queryProperty.Limit = qp.Limit
+		}
+	}
+
 	v := reflect.ValueOf(msgs)
 	if v.Kind() != reflect.Ptr {
 		return errors.Errorf("must be passed a pointer to a slice %v", v.Type())
@@ -162,7 +173,7 @@ func (db *DB) All(msgs interface{}, query qm.QueryComponent) (err error) {
 	v = v.Elem()
 	recordType := proto.MessageName(reflect.New(v.Type().Elem()).Interface().(proto.Message))
 
-	respProto, err := db.sendQuery(recordType, query)
+	respProto, err := db.executeQuery(recordType, query, queryProperty)
 	if err != nil {
 		return
 	}
@@ -194,11 +205,7 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 
 func (db *DB) sendRequest(query transport.Request, path string) (respProto *transport.Response, err error) {
 	query.Token = db.token
-	queryClient, err := db.client.Query(context.Background(), &query)
-	if err != nil {
-		return
-	}
-	respProto, err = queryClient.Recv()
+	respProto, err = db.client.Query(context.Background(), &query)
 	if err != nil {
 		return
 	}

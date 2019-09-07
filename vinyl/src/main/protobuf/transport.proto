@@ -28,15 +28,31 @@ message LoginResponse {
 }
 
 service Vinyl {
-  // Sends a greeting
   rpc Login(LoginRequest) returns (LoginResponse) {}
-  rpc Query(Request) returns (stream Response) {}
+  rpc Query(Request) returns (Response) {}
 }
 
 message Query {
-  string token = 1;
+  RecordQuery record_query = 1;
+  ExecuteProperties execute_properties = 4;
+  Value primary_key = 5;
+  enum QueryType {
+    RECORD_QUERY = 0;
+    DELETE_WHERE = 1;
+    DELETE = 2;
+    FIND = 3;
+  }
+  QueryType query_type = 3;
+}
+
+message RecordQuery {
+  QueryComponent filter = 1;
   string record_type = 2;
-  QueryComponent filter = 3;
+}
+
+message ExecuteProperties {
+  int32 limit = 1;
+  int32 skip = 2;
 }
 
 message QueryComponent {
