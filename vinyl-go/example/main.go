@@ -3,6 +3,7 @@ package main
 //go:generate protoc -I . ./tables.proto --go_out=plugins=grpc:.
 
 import (
+	fmt "fmt"
 	"log"
 
 	vinyl "github.com/embly/vinyl/vinyl-go"
@@ -22,19 +23,7 @@ type Value struct {
 	String string
 }
 
-// Query.and(
-// 	Query.field("price").lessThan(50),
-// 	Query.field("flower").matches(Query.field("type").equalsValue(FlowerType.ROSE.name())))
 func main() {
-	_ = Query{
-		And: []Query{
-			{Field: "price", LessThan: Value{Int: 50}},
-			{Field: "flower", Matches: &Query{
-				Field:  "type",
-				Equals: Value{String: "foo"},
-			}},
-		},
-	}
 
 	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", vinyl.Metadata{
 		Descriptor: proto.FileDescriptor("tables.proto"),
@@ -61,7 +50,7 @@ func main() {
 
 	user2 := User{
 		Id:    "whoever",
-		Email: "max@max.com",
+		Email: "max2@max.com",
 	}
 	if err := db.Insert(&user2); err != nil {
 		log.Fatal(err)
@@ -69,18 +58,21 @@ func main() {
 
 	queryResponse := User{}
 	if err := db.First(&queryResponse,
-		qm.Field("email").Equals("max@max.com")); err != nil {
+		qm.Field("id").Equals("whoever")); err != nil {
 		log.Fatal(err)
 	}
-	if queryResponse.Id != "whatever" {
+	fmt.Println(queryResponse)
+	if queryResponse.Email != "max@max.com" {
 		log.Fatal("I have failed me")
 	}
 
-	users := []User{}
-	if err := db.All(&users,
-		qm.Field("email").Equals("max@max.com")); err != nil {
-		log.Fatal(err)
-	}
+	// users := []User{}
+	// if err := db.All(&users,
+	// 	qm.Field("id").GreaterThan("a")); err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// fmt.Println(users)
 
 	// users := []User{}
 	// log.Println(db.First(&user))

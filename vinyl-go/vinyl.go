@@ -106,6 +106,9 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 	}
 	loginRequest.FileDescriptor = b
 	resp, err := client.Login(context.Background(), &loginRequest)
+	if err != nil {
+		return
+	}
 	if resp.Error != "" {
 		err = errors.New(resp.Error)
 		return
@@ -120,36 +123,57 @@ func (db *DB) Close() (err error) {
 	return nil
 }
 
-func (db *DB) First(msg proto.Message, query qm.QueryComponent) (err error) {
+func (db *DB) sendQuery(recordType string, query qm.QueryComponent) (respProto *transport.Response, err error) {
 	qc, errs := query.QueryComponent()
 	if len(errs) != 0 {
 		// TODO: combine errors
-		return errs[0]
+		err = errs[0]
+		return
 	}
 	q := transport.Query{
 		Filter:     qc,
-		RecordType: proto.MessageName(msg),
+		RecordType: recordType,
 	}
-	fmt.Println(q.RecordType)
 	request := transport.Request{
 		Query: &q,
 	}
-	respProto, err := db.sendRequest(request, "")
+	return db.sendRequest(request, "")
+}
+
+// First ...
+func (db *DB) First(msg proto.Message, query qm.QueryComponent) (err error) {
+	respProto, err := db.sendQuery(proto.MessageName(msg), query)
 	if err != nil {
 		return
 	}
+	fmt.Println(respProto.Records, err)
 	if len(respProto.Records) > 0 {
 		return proto.Unmarshal(respProto.Records[0], msg)
 	}
 	return nil
 }
 
+// All ...
 func (db *DB) All(msgs interface{}, query qm.QueryComponent) (err error) {
-	rv := reflect.ValueOf(msgs)
-	msgType := rv.Elem().Type().Elem()
-	val := reflect.New(msgType).Interface()
-	name := proto.MessageName(val.(proto.Message))
-	fmt.Println(name)
+	v := reflect.ValueOf(msgs)
+	if v.Kind() != reflect.Ptr {
+		return errors.Errorf("must be passed a pointer to a slice %v", v.Type())
+	}
+	v = v.Elem()
+	recordType := proto.MessageName(reflect.New(v.Type().Elem()).Interface().(proto.Message))
+
+	respProto, err := db.sendQuery(recordType, query)
+	if err != nil {
+		return
+	}
+	size := len(respProto.Records)
+	v.Set(reflect.MakeSlice(v.Type(), size, size))
+	for i := 0; i < size; i++ {
+		proto.Unmarshal(
+			respProto.Records[i],
+			v.Index(i).Addr().Interface().(proto.Message),
+		)
+	}
 	return nil
 }
 
@@ -174,12 +198,12 @@ func (db *DB) sendRequest(query transport.Request, path string) (respProto *tran
 	if err != nil {
 		return
 	}
-	resp, err := queryClient.Recv()
+	respProto, err = queryClient.Recv()
 	if err != nil {
 		return
 	}
-	if resp.Error != "" {
-		err = errors.New(resp.Error)
+	if respProto.Error != "" {
+		err = errors.New(respProto.Error)
 	}
-	return resp, err
+	return
 }

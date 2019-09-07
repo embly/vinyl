@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/embly/vinyl/vinyl-go/transport"
 	proto "github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -12,7 +13,7 @@ import (
 func TestAllMethod(t *testing.T) {
 	// db := DB{}
 
-	qs := []Query{}
+	qs := []transport.Query{}
 	if err := fillInterfaceWithType(&qs); err != nil {
 		t.Error(err)
 	}
@@ -28,6 +29,9 @@ func fillInterfaceWithType(msgs interface{}) (err error) {
 		return errors.Errorf("must be passed a pointer to a slice %v", v.Type())
 	}
 	v = v.Elem()
+
+	fmt.Println(proto.MessageName(reflect.New(v.Type().Elem()).Interface().(proto.Message)))
+
 	if v.Kind() != reflect.Slice {
 		return errors.Errorf("can't fill non-slice value")
 	}
@@ -42,8 +46,8 @@ func fillInterfaceWithType(msgs interface{}) (err error) {
 	return nil
 }
 
-func marshalAndReturn() (out []Query) {
-	out = make([]Query, 3)
+func marshalAndReturn() (out []transport.Query) {
+	out = make([]transport.Query, 3)
 	for i := 0; i < 3; i++ {
 		proto.Unmarshal(
 			[]byte{10, 8, 119, 104, 97, 116, 101, 118, 101, 114, 18, 11, 109, 97, 120, 64, 109, 97, 120, 46, 99, 111, 109},
@@ -55,7 +59,7 @@ func marshalAndReturn() (out []Query) {
 func BenchmarkReflect(b *testing.B) {
 	// run the Fib function b.N times
 	for n := 0; n < b.N; n++ {
-		qs := []Query{}
+		qs := []transport.Query{}
 		if err := fillInterfaceWithType(&qs); err != nil {
 			b.Error(err)
 		}

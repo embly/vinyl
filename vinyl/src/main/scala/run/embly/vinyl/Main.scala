@@ -239,6 +239,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
         )
 
         val keyspacePath = keySpace.path(session.keySpace)
+
         for (insertion <- (req.insertions: Seq[vinyl.transport.Insert])) {
           val data: ByteString = insertion.data
 
@@ -283,15 +284,14 @@ class VinylServer(executionContext: ExecutionContext) { self =>
             response = response.addRecords(
               ByteString.copyFrom(msg.getStoredRecord.getRecord.toByteArray)
             )
+            println(s"got cursor message $msg ${msg.getStoredRecord.getRecord} $response")
           })
         }
 
         context.commit()
         context.close()
-
-        println(s"got query request $req")
+        println(s"got query request $req $response")
         responseObserver.onNext(response)
-        responseObserver.onCompleted()
       }
     }
   }
