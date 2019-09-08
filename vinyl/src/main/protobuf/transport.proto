@@ -1,0 +1,133 @@
+syntax = "proto3";
+package vinyl;
+option go_package = "transport";
+option java_package = "vinyl";
+
+message Request {
+  string token = 1;
+  repeated Insert insertions = 6;
+  Query query = 7;
+}
+
+message Response {
+  string error = 1;
+  repeated bytes records = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string keyspace = 3;
+  bytes file_descriptor = 4;
+  repeated Record records = 5;
+}
+
+message Record {
+  map<string, FieldOptions> field_options = 1;
+  string name = 2;
+}
+// from record_metadata_options.proto
+message FieldOptions {
+  bool primary_key = 2;
+  message IndexOption {
+    string type = 1; // [ default = "value" ]
+    bool unique = 2;
+    //    TODO: add back
+    //   repeated Index.Option options = 3;
+  }
+  IndexOption index = 3;
+}
+
+message LoginResponse {
+  string token = 1;
+  string error = 2;
+}
+
+service Vinyl {
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Query(Request) returns (Response) {}
+}
+
+message Query {
+  RecordQuery record_query = 1;
+  ExecuteProperties execute_properties = 4;
+  Value primary_key = 5;
+  enum QueryType {
+    RECORD_QUERY = 0;
+    DELETE_WHERE = 1;
+    DELETE_RECORD = 2;
+    LOAD_RECORD = 3;
+  }
+  QueryType query_type = 3;
+  string record_type = 6;
+}
+
+message RecordQuery { QueryComponent filter = 1; }
+
+message ExecuteProperties {
+  int32 limit = 1;
+  int32 skip = 2;
+}
+
+message QueryComponent {
+  QueryComponent child = 1;
+  repeated QueryComponent children = 2;
+  enum ComponentType {
+    AND = 0;
+    OR = 1;
+    NOT = 2;
+    FIELD = 3;
+  }
+  ComponentType component_type = 3;
+  Field field = 4;
+}
+
+message Field {
+  enum ComponentType {
+    EQUALS = 0;
+    GREATER_THAN = 1;
+    LESS_THAN = 2;
+    EMPTY = 3;
+    NOT_EMPTY = 4;
+    IS_NULL = 5;
+    MATCHES = 6;
+  }
+  string name = 1;
+  Value value = 2;
+  ComponentType component_type = 3;
+  QueryComponent matches = 4;
+}
+
+message Value {
+  enum ValueType {
+    DOUBLE = 0;
+    FLOAT = 1;
+    INT32 = 2;
+    INT64 = 3;
+    SINT32 = 5;
+    SINT64 = 6;
+    BOOL = 9;
+    STRING = 10;
+    BYTES = 11;
+  }
+  double double = 1;
+  float float = 2;
+  int32 int32 = 3;
+  int64 int64 = 4;
+  // uint32 not supported
+  // uint64 not supported
+  sint32 sint32 = 6;
+  sint64 sint64 = 7;
+  // fixed32 not supported
+  // fixed64 not supported
+  bool bool = 10;
+  string string = 11;
+  bytes bytes = 12;
+
+  ValueType value_type = 20;
+}
+
+message Insert {
+  string record = 1;
+  bytes data = 2;
+}

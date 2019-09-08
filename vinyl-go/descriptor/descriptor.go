@@ -36,14 +36,17 @@ func AddRecordTypeUnion(descriptorBytes []byte, tables []string) (out []byte, er
 	descriptor := DescriptorProto{
 		Name: ptrString("RecordTypeUnion"),
 	}
-
+	var packageName string
+	if fdp.Package != nil {
+		packageName = "." + *fdp.Package
+	}
 	for i, table := range tables {
 		field := FieldDescriptorProto{
 			Name:     ptrString("_" + table),
 			Number:   ptrInt32(int32(i + 1)),
 			Label:    FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
 			Type:     FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-			TypeName: ptrString(fmt.Sprintf(".%s.%s", *fdp.Package, table)),
+			TypeName: ptrString(fmt.Sprintf("%s.%s", packageName, table)),
 			JsonName: &table,
 		}
 		descriptor.Field = append(descriptor.Field, &field)

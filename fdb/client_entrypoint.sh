@@ -8,4 +8,5 @@ sleep 2
 
 cp /etc/foundationdb/fdb.cluster /opt/app
 
-sbt ~reStart
+sleep 100000
+# sbt ~reStart
