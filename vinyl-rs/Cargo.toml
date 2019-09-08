@@ -1,0 +1,12 @@
+[package]
+name = "vinyl"
+version = "0.0.1"
+description = "A convenience layer for the FoundationDB Record Layer"
+readme = "./readme.md"
+homepage = "https://github.com/embly/vinyl"
+documentation = "https://github.com/embly/vinyl"
+license = "MIT"
+authors = ["maxmcd <m@xmcd.me>"]
+edition = "2018"
+
+[dependencies]
