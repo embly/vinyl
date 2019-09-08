@@ -30,8 +30,6 @@ func fillInterfaceWithType(msgs interface{}) (err error) {
 	}
 	v = v.Elem()
 
-	fmt.Println(proto.MessageName(reflect.New(v.Type().Elem()).Interface().(proto.Message)))
-
 	if v.Kind() != reflect.Slice {
 		return errors.Errorf("can't fill non-slice value")
 	}

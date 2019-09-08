@@ -39,16 +39,14 @@ message Query {
   enum QueryType {
     RECORD_QUERY = 0;
     DELETE_WHERE = 1;
-    DELETE = 2;
-    FIND = 3;
+    DELETE_RECORD = 2;
+    LOAD_RECORD = 3;
   }
   QueryType query_type = 3;
+  string record_type = 6;
 }
 
-message RecordQuery {
-  QueryComponent filter = 1;
-  string record_type = 2;
-}
+message RecordQuery { QueryComponent filter = 1; }
 
 message ExecuteProperties {
   int32 limit = 1;

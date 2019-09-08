@@ -20,7 +20,14 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.concurrent.{ExecutionContext, Future}
 import vinyl.transport
-import vinyl.transport.{ExecuteProperties, LoginRequest, LoginResponse, Request, Response, VinylGrpc}
+import vinyl.transport.{
+  ExecuteProperties,
+  LoginRequest,
+  LoginResponse,
+  Request,
+  Response,
+  VinylGrpc
+}
 import java.util.logging.Logger
 
 class Session(ks: String, descriptorBytes: ByteString) {
@@ -132,16 +139,21 @@ class VinylServer(executionContext: ExecutionContext) { self =>
 
     }
   }
-  def buildQuery(recordQuery: transport.RecordQuery): RecordQuery = {
+  def buildQuery(
+      query: transport.Query,
+      recordQuery: transport.RecordQuery
+  ): RecordQuery = {
     var builder = RecordQuery
       .newBuilder()
     if (recordQuery.filter.isDefined) {
       builder.setFilter(wrapQuery(recordQuery.filter.get))
     }
-    builder.setRecordType(recordQuery.recordType)
+    builder.setRecordType(query.recordType)
     builder.build()
   }
-  def convertExecuteProperties(maybeExecuteProperties: Option[transport.ExecuteProperties]): Option[foundationdb.record.ExecuteProperties] = {
+  def convertExecuteProperties(
+      maybeExecuteProperties: Option[transport.ExecuteProperties]
+  ): Option[foundationdb.record.ExecuteProperties] = {
     maybeExecuteProperties match {
       case Some(executeProperties) =>
         if (executeProperties.skip == 0 && executeProperties.limit == 0) {
@@ -163,25 +175,88 @@ class VinylServer(executionContext: ExecutionContext) { self =>
   def recordQuery(store: FDBRecordStore, query: transport.Query): Response = {
     var response = Response()
     val recordQueryProto: transport.RecordQuery = query.recordQuery.get
-    val recordQuery = buildQuery(recordQueryProto)
+    val recordQuery = buildQuery(query, recordQueryProto)
     val cursor = convertExecuteProperties(query.executeProperties) match {
-      case Some(executeProperties) => store.executeQuery(recordQuery, null, executeProperties)
+      case Some(executeProperties) =>
+        store.executeQuery(recordQuery, null, executeProperties)
       case None => store.executeQuery(recordQuery)
     }
 
     var msg = cursor.onNext().get
+
     while (msg.hasNext) {
+      println(s"PRIMARY KEY TIME ${msg.get.getStoredRecord.getPrimaryKey}")
       response = response.addRecords(
         ByteString.copyFrom(msg.get.getStoredRecord.getRecord.toByteArray)
       )
-      println(s"got cursor message $msg ${msg.get.getStoredRecord.getRecord} $response")
+      println(
+        s"got cursor message $msg ${msg.get.getStoredRecord.getRecord} $response"
+      )
       msg = cursor.onNext().get
     }
     response
   }
-  def processQuery(store: FDBRecordStore, query: transport.Query): Response = {
+  def loadRecord(
+      store: FDBRecordStore,
+      session: Session,
+      query: transport.Query
+  ): Response = {
+    val recordType = session.metadata.build().getRecordType(query.recordType)
+    var response = Response()
+    val tuple = recordType.getRecordTypeKeyTuple.addObject(
+      wrapValue(query.primaryKey.get).asInstanceOf[AnyRef]
+    )
+
+    val msg = store.loadRecord(tuple)
+    println(s"load record request $msg ${tuple}")
+    if (msg != null) {
+      response =
+        response.addRecords(ByteString.copyFrom(msg.getRecord.toByteArray))
+    }
+    response
+  }
+  def deleteRecord(
+      store: FDBRecordStore,
+      session: Session,
+      query: transport.Query
+  ): Response = {
+    val recordType = session.metadata.build().getRecordType(query.recordType)
+    var response = Response()
+    val tuple = recordType.getRecordTypeKeyTuple.addObject(
+      wrapValue(query.primaryKey.get).asInstanceOf[AnyRef]
+    )
+
+    store.deleteRecord(tuple)
+    Response()
+  }
+  def deleteWhere(
+      store: FDBRecordStore,
+      session: Session,
+      query: transport.Query
+  ): Response = {
+    val recordQueryProto: transport.RecordQuery = query.recordQuery.get
+    store.deleteRecordsWhere(
+      query.recordType,
+      if (recordQueryProto.filter.isDefined)
+        wrapQuery(recordQueryProto.filter.get)
+      else null
+    )
+    // TODO: error handling?
+    Response()
+  }
+  def processQuery(
+      store: FDBRecordStore,
+      session: Session,
+      query: transport.Query
+  ): Response = {
     query.queryType match {
       case transport.Query.QueryType.RECORD_QUERY => recordQuery(store, query)
+      case transport.Query.QueryType.LOAD_RECORD =>
+        loadRecord(store, session, query)
+      case transport.Query.QueryType.DELETE_RECORD =>
+        deleteRecord(store, session, query)
+      case transport.Query.QueryType.DELETE_WHERE =>
+        deleteWhere(store, session, query)
     }
   }
 
@@ -236,7 +311,12 @@ class VinylServer(executionContext: ExecutionContext) { self =>
 
           if (fieldOption.primaryKey) {
             println(s"Adding primary key '$name' to '${table.name}'")
-            recordType.setPrimaryKey(Key.Expressions.field(name))
+            recordType.setPrimaryKey(
+              Key.Expressions.concat(
+                Key.Expressions.recordType(),
+                Key.Expressions.field(name)
+              )
+            )
           } else if (idx.isDefined && idx.get.`type` == "value") {
             println(s"Adding index to '${table.name}' for field '$name'")
             session.metadata.addIndex(
@@ -258,7 +338,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
       Future.successful(reply)
     }
     override def query(
-        req: Request,
+        req: Request
     ) = {
       if (!activeSessions.contains(req.token)) {
         Future.successful(Response(error = "auth token is invalid"))
@@ -316,7 +396,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
             .setContext(context)
             .setKeySpacePath(keyspacePath)
             .createOrOpen()
-          response = processQuery(store, query)
+          response = processQuery(store, session, query)
         }
         context.commit()
         context.close()

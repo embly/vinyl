@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+var ErrNoRows = errors.New("vinyl: no rows in result set")
+
 // DB is an instance of a connection to the Record Layer database
 type DB struct {
 	client   transport.VinylClient
@@ -124,9 +126,7 @@ func (db *DB) Close() (err error) {
 }
 
 func (db *DB) executeQuery(recordType string, query qm.QueryComponent, queryProperty qm.QueryProperty) (respProto *transport.Response, err error) {
-	rq := transport.RecordQuery{
-		RecordType: recordType,
-	}
+	rq := transport.RecordQuery{}
 	if qc, ok := query.(qm.QueryComponent); ok {
 		filter, errs := qc.QueryComponent()
 		if len(errs) != 0 {
@@ -144,13 +144,75 @@ func (db *DB) executeQuery(recordType string, query qm.QueryComponent, queryProp
 				Skip:  int32(queryProperty.Skip),
 			},
 			RecordQuery: &rq,
+			RecordType:  recordType,
 		},
 	}
 	fmt.Println(request)
 	return db.sendRequest(request, "")
 }
 
-func (db *DB) LoadRecord(msg proto.Message, pk interface{}) {
+func (db *DB) LoadRecord(msg proto.Message, pk interface{}) (err error) {
+	value, err := qm.ValueForInterface(pk)
+	if err != nil {
+		return
+	}
+	request := transport.Request{
+		Query: &transport.Query{
+			QueryType:  transport.Query_LOAD_RECORD,
+			PrimaryKey: value,
+			RecordType: proto.MessageName(msg),
+		},
+	}
+	resp, err := db.sendRequest(request, "")
+	if err != nil {
+		return err
+	}
+	if len(resp.Records) > 0 {
+		return proto.Unmarshal(resp.Records[0], msg)
+	}
+	return nil
+}
+
+func (db *DB) DeleteRecord(msg proto.Message, pk interface{}) (err error) {
+	value, err := qm.ValueForInterface(pk)
+	if err != nil {
+		return
+	}
+	request := transport.Request{
+		Query: &transport.Query{
+			QueryType:  transport.Query_DELETE_RECORD,
+			PrimaryKey: value,
+			RecordType: proto.MessageName(msg),
+		},
+	}
+	if _, err := db.sendRequest(request, ""); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *DB) DeleteWhere(msg proto.Message, query qm.QueryComponent) (err error) {
+	rq := transport.RecordQuery{}
+	if qc, ok := query.(qm.QueryComponent); ok {
+		filter, errs := qc.QueryComponent()
+		if len(errs) != 0 {
+			// TODO: combine errors
+			err = errs[0]
+			return
+		}
+		rq.Filter = filter
+	}
+	request := transport.Request{
+		Query: &transport.Query{
+			QueryType:   transport.Query_DELETE_WHERE,
+			RecordType:  proto.MessageName(msg),
+			RecordQuery: &rq,
+		},
+	}
+	if _, err := db.sendRequest(request, ""); err != nil {
+		return err
+	}
+	return nil
 
 }
 

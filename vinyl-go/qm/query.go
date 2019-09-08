@@ -87,54 +87,62 @@ func Field(name string) *FieldMeta {
 	}
 }
 
-func (fm *FieldMeta) valueForInterface(value interface{}) *transport.Value {
+func ValueForInterface(value interface{}) (out *transport.Value, err error) {
 	switch value := value.(type) {
 	case float64:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_DOUBLE,
 			Double:    value,
 		}
 	case float32:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_FLOAT,
 			Float:     value,
 		}
 	case int32:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_INT32,
 			Int32:     value,
 		}
 	case int64:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_INT64,
 			Int64:     value,
 		}
 	case int:
 		// TODO: is this ok?
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_INT64,
 			Int64:     int64(value),
 		}
 	case bool:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_BOOL,
 			Bool:      value,
 		}
 	case string:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_STRING,
 			String_:   value,
 		}
 	case []byte:
-		return &transport.Value{
+		out = &transport.Value{
 			ValueType: transport.Value_BYTES,
 			Bytes:     value,
 		}
 	default:
-		fm.errors = append(fm.errors, errors.New("type not supported"))
-		return &transport.Value{}
+		err = errors.New("type not supported")
 	}
+	return
+}
 
+func (fm *FieldMeta) valueForInterface(value interface{}) *transport.Value {
+	out, err := ValueForInterface(value)
+	if err != nil {
+		fm.errors = append(fm.errors, err)
+		out = &transport.Value{}
+	}
+	return out
 }
 
 // Equals used like `Field("foo").Equals("bar")`
