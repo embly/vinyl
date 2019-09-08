@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 
 	proto "github.com/golang/protobuf/proto"
+	pb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/pkg/errors"
 )
 
@@ -18,7 +19,7 @@ func ptrInt32(val int32) *int32 {
 }
 
 // AddRecordTypeUnion takes a compressed protobuf descriptor and adds the RecordTypeUnion
-func AddRecordTypeUnion(descriptorBytes []byte, tables []string) (out []byte, err error) {
+func AddRecordTypeUnion(descriptorBytes []byte, records []string) (out []byte, err error) {
 	zr, err := gzip.NewReader(bytes.NewBuffer(descriptorBytes))
 	if err != nil {
 		return
@@ -28,26 +29,26 @@ func AddRecordTypeUnion(descriptorBytes []byte, tables []string) (out []byte, er
 		return
 	}
 	zr.Close()
-	fdp := FileDescriptorProto{}
+	fdp := pb.FileDescriptorProto{}
 	if err = proto.Unmarshal(b, &fdp); err != nil {
 		err = errors.Wrap(err, "error unmarshaling the descriptor, is it the right format?")
 		return
 	}
-	descriptor := DescriptorProto{
+	descriptor := pb.DescriptorProto{
 		Name: ptrString("RecordTypeUnion"),
 	}
 	var packageName string
 	if fdp.Package != nil {
 		packageName = "." + *fdp.Package
 	}
-	for i, table := range tables {
-		field := FieldDescriptorProto{
-			Name:     ptrString("_" + table),
+	for i, record := range records {
+		field := pb.FieldDescriptorProto{
+			Name:     ptrString("_" + record),
 			Number:   ptrInt32(int32(i + 1)),
-			Label:    FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
-			Type:     FieldDescriptorProto_TYPE_MESSAGE.Enum(),
-			TypeName: ptrString(fmt.Sprintf("%s.%s", packageName, table)),
-			JsonName: &table,
+			Label:    pb.FieldDescriptorProto_LABEL_OPTIONAL.Enum(),
+			Type:     pb.FieldDescriptorProto_TYPE_MESSAGE.Enum(),
+			TypeName: ptrString(fmt.Sprintf("%s.%s", packageName, record)),
+			JsonName: &record,
 		}
 		descriptor.Field = append(descriptor.Field, &field)
 	}

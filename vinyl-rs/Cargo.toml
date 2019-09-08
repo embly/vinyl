@@ -1,0 +1,21 @@
+[package]
+name = "vinyl"
+version = "0.0.1"
+description = "A convenience layer for the FoundationDB Record Layer"
+readme = "./readme.md"
+homepage = "https://github.com/embly/vinyl"
+documentation = "https://github.com/embly/vinyl"
+license = "MIT"
+authors = ["maxmcd <m@xmcd.me>"]
+edition = "2018"
+
+[dependencies]
+grpc = "~0.6"
+protobuf = "~2"
+futures = "~0.1"
+futures-cpupool = "~0.1"
+url = "2.1.0"
+failure = "0.1.5"
+
+[build-dependencies]
+protoc-rust-grpc = "0.6.1"
