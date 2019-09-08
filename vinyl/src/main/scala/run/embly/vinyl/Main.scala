@@ -411,7 +411,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
           context.commit()
         } catch {
           case uniqueness: foundationdb.record.RecordIndexUniquenessViolation => {
-            response = Response(error = "Duplicate entry for unique index")
+            response = Response(error = uniqueness.getMessage)
           }
         }
         context.close()
