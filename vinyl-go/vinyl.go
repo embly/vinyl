@@ -1,3 +1,4 @@
+// Package vinyl is a Go library to connect to Vinyl and the FoundationDB Record Layer.
 package vinyl
 
 import (
@@ -24,8 +25,8 @@ type DB struct {
 	token    string
 }
 
-// Table defines a Record Layer table
-type Table struct {
+// Record defines a Record Layer record type
+type Record struct {
 	Name       string
 	PrimaryKey string
 	Indexes    []Index
@@ -37,13 +38,24 @@ type Index struct {
 	Unique bool
 }
 
-// Metadata defines the proto file descriptor and related table and index data
+// Metadata defines the proto file descriptor and related record and index data
 type Metadata struct {
 	Descriptor []byte
-	Tables     []Table
+	Records    []Record
 }
 
-// Connect ...
+// Connect connects to a vinyl server and returns a DB instance.
+//    db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", vinyl.Metadata{
+//    	Descriptor: proto.FileDescriptor("tables.proto"),
+//    	Records: []vinyl.Record{{
+//    		Name:       "User",
+//    		PrimaryKey: "id",
+//    		Indexes: []vinyl.Index{{
+//    			Field:  "email",
+//    			Unique: true,
+//    		}},
+//    	}},
+//    })
 func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 	u, err := url.Parse(connectionString)
 	if err != nil {
@@ -76,10 +88,10 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		Password: password,
 		Keyspace: u.Path,
 	}
-	tableNames := make([]string, len(metadata.Tables))
-	for i, t := range metadata.Tables {
-		tableNames[i] = t.Name
-		table := transport.Table{
+	recordNames := make([]string, len(metadata.Records))
+	for i, t := range metadata.Records {
+		recordNames[i] = t.Name
+		record := transport.Record{
 			Name: t.Name,
 			FieldOptions: map[string]*transport.FieldOptions{
 				t.PrimaryKey: &transport.FieldOptions{
@@ -88,7 +100,7 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 			},
 		}
 		for _, idx := range t.Indexes {
-			v := table.FieldOptions[idx.Field]
+			v := record.FieldOptions[idx.Field]
 			if v == nil {
 				v = &transport.FieldOptions{}
 			}
@@ -96,12 +108,12 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 				Type:   "value",
 				Unique: idx.Unique,
 			}
-			table.FieldOptions[idx.Field] = v
+			record.FieldOptions[idx.Field] = v
 		}
-		loginRequest.Tables = append(loginRequest.Tables, &table)
+		loginRequest.Records = append(loginRequest.Records, &record)
 	}
 
-	b, err := descriptor.AddRecordTypeUnion(metadata.Descriptor, tableNames)
+	b, err := descriptor.AddRecordTypeUnion(metadata.Descriptor, recordNames)
 	if err != nil {
 		err = errors.Wrap(err, "error parsing descriptor")
 		return
@@ -119,7 +131,7 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 	return
 }
 
-// Close ...
+// Close closes the underlying grpc connection to the vinyl server
 func (db *DB) Close() (err error) {
 	db.grpcConn.Close()
 	return nil
@@ -151,6 +163,13 @@ func (db *DB) executeQuery(recordType string, query qm.QueryComponent, queryProp
 	return db.sendRequest(request, "")
 }
 
+// LoadRecord loads a single record using its primary key value. You must pass a struct of the
+// proto message type for underlying record. vinyl-go uses "proto.MessageName(msg)" to get the
+// name of the record type
+//    user := User{}
+//    if err := db.LoadRecord(&user, "primary_key"); err != nil {
+//    	t.Error(err)
+//    }
 func (db *DB) LoadRecord(msg proto.Message, pk interface{}) (err error) {
 	value, err := qm.ValueForInterface(pk)
 	if err != nil {
@@ -173,6 +192,13 @@ func (db *DB) LoadRecord(msg proto.Message, pk interface{}) (err error) {
 	return nil
 }
 
+// DeleteRecord deletes a record using its primary key. You must pass a struct of the
+// proto message type for underlying record. vinyl-go uses "proto.MessageName(msg)" to get the
+// name of the record type
+//    user := User{}
+//    if err := db.DeleteRecord(&user, "whoever"); err != nil {
+//    	t.Error(err)
+//    }
 func (db *DB) DeleteRecord(msg proto.Message, pk interface{}) (err error) {
 	value, err := qm.ValueForInterface(pk)
 	if err != nil {
@@ -216,7 +242,17 @@ func (db *DB) DeleteWhere(msg proto.Message, query qm.QueryComponent) (err error
 
 }
 
-// ExecuteQuery ...
+// ExecuteQuery executes a query and returns the matching records
+//    queryResponse := []User{}
+//    if err := db.ExecuteQuery(&queryResponse,
+//    	qm.Or(
+//    		qm.Field("email").Equals("max@max.com"),
+//    		qm.Field("email").Equals("foo@bar.com"),
+//    	),
+//    	qm.Limit(10),
+//    ); err != nil {
+//    	t.Error(err)
+//    }
 func (db *DB) ExecuteQuery(msgs interface{}, query qm.QueryComponent, queryProperites ...qm.QueryProperty) (err error) {
 	queryProperty := qm.QueryProperty{}
 	for _, qp := range queryProperites {
@@ -250,7 +286,14 @@ func (db *DB) ExecuteQuery(msgs interface{}, query qm.QueryComponent, queryPrope
 	return nil
 }
 
-// Insert ...
+// Insert inserts a record
+//    user := User{
+//    	Id:    "whatever",
+//    	Email: "max@max.com",
+//    }
+//    if err := db.Insert(&user); err != nil {
+//    	t.Error(err)
+//    }
 func (db *DB) Insert(msg proto.Message) (err error) {
 	request := transport.Request{}
 	b, err := proto.Marshal(msg)
@@ -258,8 +301,8 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 		errors.Wrap(err, "error marshalling proto message")
 	}
 	request.Insertions = append(request.Insertions, &transport.Insert{
-		Table: proto.MessageName(msg),
-		Data:  b,
+		Record: proto.MessageName(msg),
+		Data:   b,
 	})
 	_, err = db.sendRequest(request, "")
 	return

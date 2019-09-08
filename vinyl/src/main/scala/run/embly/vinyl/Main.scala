@@ -298,19 +298,19 @@ class VinylServer(executionContext: ExecutionContext) { self =>
         descriptorBytes
       )
 
-      val tables: Seq[vinyl.transport.Table] = req.tables
-      for (table <- tables) {
-        val recordType = session.metadata.getRecordType(table.name)
+      val records: Seq[vinyl.transport.Record] = req.records
+      for (record <- records) {
+        val recordType = session.metadata.getRecordType(record.name)
 
         val fieldOptions: Map[String, vinyl.transport.FieldOptions] =
-          table.fieldOptions
+          record.fieldOptions
 
         for ((name, fieldOption) <- fieldOptions) {
           val idx: Option[vinyl.transport.FieldOptions.IndexOption] =
             fieldOption.index
 
           if (fieldOption.primaryKey) {
-            println(s"Adding primary key '$name' to '${table.name}'")
+            println(s"Adding primary key '$name' to '${record.name}'")
             recordType.setPrimaryKey(
               Key.Expressions.concat(
                 Key.Expressions.recordType(),
@@ -318,9 +318,9 @@ class VinylServer(executionContext: ExecutionContext) { self =>
               )
             )
           } else if (idx.isDefined && idx.get.`type` == "value") {
-            println(s"Adding index to '${table.name}' for field '$name'")
+            println(s"Adding index to '${record.name}' for field '$name'")
             session.metadata.addIndex(
-              table.name: String,
+              record.name: String,
               new Index("todoIndex", Key.Expressions.field(name))
             )
           }
@@ -362,10 +362,10 @@ class VinylServer(executionContext: ExecutionContext) { self =>
           val data: ByteString = insertion.data
 
           println(
-            s"found insertion ${insertion.table} ${data.toByteArray.mkString(" ")}"
+            s"found insertion ${insertion.record} ${data.toByteArray.mkString(" ")}"
           )
 
-          val descriptor = session.messageDescriptorMap(insertion.table);
+          val descriptor = session.messageDescriptorMap(insertion.record);
           val builder = DynamicMessage.newBuilder(descriptor);
           builder.mergeFrom(insertion.data: ByteString).build()
           println(descriptor.getFields)

@@ -12,7 +12,7 @@ import (
 func TestBasic(t *testing.T) {
 	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", vinyl.Metadata{
 		Descriptor: proto.FileDescriptor("tables.proto"),
-		Tables: []vinyl.Table{{
+		Records: []vinyl.Record{{
 			Name:       "User",
 			PrimaryKey: "id",
 			Indexes: []vinyl.Index{{
@@ -43,8 +43,11 @@ func TestBasic(t *testing.T) {
 
 	queryResponse := []User{}
 	if err := db.ExecuteQuery(&queryResponse,
-		qm.Field("id").Equals("whatever"),
-		qm.Limit(1),
+		qm.Or(
+			qm.Field("email").Equals("max@max.com"),
+			qm.Field("email").Equals("foo@bar.com"),
+		),
+		qm.Limit(10),
 	); err != nil {
 		t.Error(err)
 	}
@@ -81,6 +84,7 @@ func TestBasic(t *testing.T) {
 	}
 
 	users = []User{}
+	_ = users
 	if err := db.ExecuteQuery(&users, nil); err != nil {
 		t.Error(err)
 	}

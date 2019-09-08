@@ -19,7 +19,23 @@ message LoginRequest {
   string password = 2;
   string keyspace = 3;
   bytes file_descriptor = 4;
-  repeated Table tables = 5;
+  repeated Record records = 5;
+}
+
+message Record {
+  map<string, FieldOptions> field_options = 1;
+  string name = 2;
+}
+// from record_metadata_options.proto
+message FieldOptions {
+  bool primary_key = 2;
+  message IndexOption {
+    string type = 1; // [ default = "value" ]
+    bool unique = 2;
+    //    TODO: add back
+    //   repeated Index.Option options = 3;
+  }
+  IndexOption index = 3;
 }
 
 message LoginResponse {
@@ -112,22 +128,6 @@ message Value {
 }
 
 message Insert {
-  string table = 1;
+  string record = 1;
   bytes data = 2;
-}
-
-message Table {
-  map<string, FieldOptions> field_options = 1;
-  string name = 2;
-}
-// from record_metadata_options.proto
-message FieldOptions {
-  bool primary_key = 2;
-  message IndexOption {
-    string type = 1; // [ default = "value" ]
-    bool unique = 2;
-    //    TODO: add back
-    //   repeated Index.Option options = 3;
-  }
-  IndexOption index = 3;
 }
