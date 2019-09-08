@@ -226,8 +226,11 @@ class VinylServer(executionContext: ExecutionContext) { self =>
       wrapValue(query.primaryKey.get).asInstanceOf[AnyRef]
     )
 
-    store.deleteRecord(tuple)
-    Response()
+    if (!store.deleteRecord(tuple)) {
+      Response(error = "record does not exist")
+    } else {
+      Response()
+    }
   }
   def deleteWhere(
       store: FDBRecordStore,
@@ -323,6 +326,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
               record.name: String,
               new Index("todoIndex", Key.Expressions.field(name))
             )
+            // TODO: unique indexes
           }
         }
       }
