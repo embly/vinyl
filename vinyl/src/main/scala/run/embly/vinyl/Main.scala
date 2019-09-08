@@ -4,7 +4,7 @@ import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpace
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpaceDirectory
 import com.apple.foundationdb;
-import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder}
+import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataProto, RecordMetaDataBuilder}
 import com.apple.foundationdb.record.query.RecordQuery
 import com.apple.foundationdb.record.query.expressions.{Query, QueryComponent}
 import com.apple.foundationdb.record.metadata.{Index, Key}
@@ -322,10 +322,15 @@ class VinylServer(executionContext: ExecutionContext) { self =>
             )
           } else if (idx.isDefined && idx.get.`type` == "value") {
             println(s"Adding index to '${record.name}' for field '$name'")
+            val index_name = record.name + "." + name
+            val unique: Boolean = idx.get.unique
+            val options: java.util.List[RecordMetaDataProto.Index.Option] = Nil.asJava
+            println(s"${new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique)).isUnique}")
             session.metadata.addIndex(
               record.name: String,
-              new Index("todoIndex", Key.Expressions.field(name))
+              new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique))
             )
+
             // TODO: unique indexes
           }
         }
@@ -402,7 +407,13 @@ class VinylServer(executionContext: ExecutionContext) { self =>
             .createOrOpen()
           response = processQuery(store, session, query)
         }
-        context.commit()
+        try {
+          context.commit()
+        } catch {
+          case uniqueness: foundationdb.record.RecordIndexUniquenessViolation => {
+            response = Response(error = "Duplicate entry for unique index")
+          }
+        }
         context.close()
         println(s"got query request $req $response")
         Future.successful(response)

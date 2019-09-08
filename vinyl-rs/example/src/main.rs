@@ -27,10 +27,16 @@ fn main() -> Result<(), Error> {
     user.set_id("yo_pk".to_string());
     db.insert(user)?;
 
+    let mut user = User::new();
+    user.set_email("max@max.com".to_string());
+    user.set_id("yo_pk2".to_string());
+    db.insert(user).expect_err("uniqueness violation");
+
     db.delete_record::<User, &str>("hi")
         .expect_err("shouldn't exist");
 
     let users: Vec<User> = db.execute_query(query::field("email").equals("max@max.com"))?;
+
     println!("{:?}", users);
     Ok(())
 }
