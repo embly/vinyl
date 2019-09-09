@@ -38,7 +38,7 @@ extern crate failure;
 
 use failure::Error;
 use grpc::ClientStubExt;
-use proto::transport::{
+use vinyl_core::proto::transport::{
     FieldOptions, FieldOptions_DefaultValue, FieldOptions_IndexOption, Insert, LoginRequest, Query,
     Query_QueryType, Record as ProtoRecord, RecordQuery, Request, Response, Value, Value_ValueType,
 };

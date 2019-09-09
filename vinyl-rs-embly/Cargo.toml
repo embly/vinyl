@@ -1,0 +1,12 @@
+[package]
+name = "vinyl-embly"
+version = "0.0.1"
+license = "MIT"
+homepage = "https://github.com/embly/vinyl"
+authors = ["maxmcd <m@xmcd.me>"]
+edition = "2018"
+
+[dependencies]
+protobuf = "~2"
+url = "2.1.0"
+failure = "0.1.5"

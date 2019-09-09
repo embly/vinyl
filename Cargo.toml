@@ -1,5 +1,7 @@
 [workspace]
 members = [
   "vinyl-rs",
+  "vinyl-rs-core",
+  "vinyl-rs-embly",
   "vinyl-rs/example"
 ]

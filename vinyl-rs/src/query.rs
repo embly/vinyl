@@ -5,8 +5,8 @@
 //! use vinyl::query::field;
 //! use failure::Error;
 //! use protobuf::Message;
-//! use vinyl::proto::example;
-//! use vinyl::proto::example::Flower;
+//! use vinyl_core::proto::example;
+//! use vinyl_core::proto::example::Flower;
 //!
 //! fn main() -> Result<(), Error> {
 //!     let db = vinyl::ConnectionBuilder::new(
@@ -27,9 +27,9 @@
 //! }
 //!```
 
-use crate::proto::transport;
 use crate::ToValue;
 use protobuf::RepeatedField;
+use vinyl_core::proto::transport;
 
 use std::ops;
 
