@@ -1,5 +1,6 @@
 package qm
 
+// QueryProperty defines properties related to query execution
 type QueryProperty struct {
 	Skip  int
 	Limit int

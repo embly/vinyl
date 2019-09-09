@@ -32,7 +32,7 @@ func And(qcs ...QueryComponent) QueryComponent {
 	return qcm
 }
 
-// Or check that a set of components all evaluate to true for a given record.
+// Or check that any of a set of components evaluate to true for a given record.
 func Or(qcs ...QueryComponent) QueryComponent {
 	qcm := &queryComponentMeta{queryComponent: &transport.QueryComponent{}}
 	qcm.queryComponent.Children = make([]*transport.QueryComponent, len(qcs))
@@ -87,6 +87,7 @@ func Field(name string) *FieldMeta {
 	}
 }
 
+// ValueForInterface translates any valid type into a protobuf value
 func ValueForInterface(value interface{}) (out *transport.Value, err error) {
 	switch value := value.(type) {
 	case float64:
