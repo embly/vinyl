@@ -36,6 +36,15 @@ message FieldOptions {
     //   repeated Index.Option options = 3;
   }
   IndexOption index = 3;
+
+  // custom extension
+  enum DefaultValue {
+    NULL = 0;
+    NOW = 1;
+    NOW_ON_UPDATE = 2;
+    UUID = 3;
+  }
+  DefaultValue default_value = 20;
 }
 
 message LoginResponse {

@@ -1,9 +1,40 @@
-use crate::transport::transport;
+//! define complex queries
+//!
+//! ```no_run
+//! use vinyl::{Record, query};
+//! use vinyl::query::field;
+//! use failure::Error;
+//! use protobuf::Message;
+//! use vinyl::proto::example;
+//! use vinyl::proto::example::Flower;
+//!
+//! fn main() -> Result<(), Error> {
+//!     let db = vinyl::ConnectionBuilder::new(
+//!         "vinyl://max:password@localhost:8090/foo",
+//!         example::file_descriptor_proto().write_to_bytes().unwrap(),
+//!     )
+//!     .add_record(Record::new::<Flower>("order_id"))
+//!     .connect()?;
+//!
+//!     let flowers: Vec<Flower> = db.execute_query(
+//!         field("price").less_than(50) &
+//!         field("flower").matches(
+//!             field("type").equals("ROSE")
+//!         )
+//!     )?;
+//!     println!("{:?}", flowers);
+//!     Ok(())
+//! }
+//!```
+
+use crate::proto::transport;
 use crate::ToValue;
 use protobuf::RepeatedField;
 
 use std::ops;
 
+/// Query is the basic component of all queries. Every query expression outputs a Query.
+/// Query is not used directly except for in the case of `Query::not`
 #[derive(Debug, PartialEq)]
 pub struct Query {
     pub(crate) qc: transport::QueryComponent,
@@ -15,7 +46,7 @@ impl Query {
         self.qc.set_field(field);
         self
     }
-    fn merge(self, other: Self, merge_type: transport::QueryComponent_ComponentType) -> Query {
+    fn merge(self, other: Self, merge_type: transport::QueryComponent_ComponentType) -> Self {
         let mut qc = transport::QueryComponent::new();
         qc.component_type = merge_type;
         qc.children = RepeatedField::new();
@@ -23,12 +54,29 @@ impl Query {
         qc.children.push(other.qc);
         Self { qc }
     }
+    /// Check that a set of components all evaluate to true for a given record.
+    /// ```rust
+    /// use vinyl::query::field;
+    ///
+    /// field("price")
+    ///     .equals(4.3)
+    ///     .and(field("type").equals("rose"));
+    /// ```
     pub fn and(self, other: Self) -> Self {
         self.merge(other, transport::QueryComponent_ComponentType::AND)
     }
+    /// Check that any of a set of components evaluate to true for a given record
     pub fn or(self, other: Self) -> Self {
         self.merge(other, transport::QueryComponent_ComponentType::OR)
     }
+    /// Negate a component test
+    /// ```rust
+    /// use vinyl::query::{field, Query};
+    ///
+    /// let query = Query::not(
+    ///     field("price").equals(4.3),
+    /// );
+    ///```
     pub fn not(other: Self) -> Self {
         let mut qc = transport::QueryComponent::new();
         qc.component_type = transport::QueryComponent_ComponentType::NOT;
@@ -45,6 +93,7 @@ impl ops::BitAnd<Query> for Query {
     }
 }
 
+/// Context for asserting about a field value
 pub struct Field {
     name: String,
 }
@@ -59,18 +108,22 @@ impl Field {
         qc.set_field(field);
         Query { qc }
     }
+    /// Checks if the field has a value less than the given comparand
     pub fn less_than<T: ToValue>(&self, value: T) -> Query {
         self.field_to_query(transport::Field_ComponentType::LESS_THAN)
             .add_field_value(value)
     }
+    /// Check if the field has a value greater than the given comparand
     pub fn greater_than<T: ToValue>(&self, value: T) -> Query {
         self.field_to_query(transport::Field_ComponentType::GREATER_THAN)
             .add_field_value(value)
     }
+    /// Check if the field is equal to the given value
     pub fn equals<T: ToValue>(&self, value: T) -> Query {
         self.field_to_query(transport::Field_ComponentType::EQUALS)
             .add_field_value(value)
     }
+    /// Matches allows comparison of nested field values
     pub fn matches(&self, query: Query) -> Query {
         let mut q = self.field_to_query(transport::Field_ComponentType::MATCHES);
         let field = q.qc.mut_field();
@@ -79,6 +132,7 @@ impl Field {
     }
 }
 
+/// start the construction of a field value
 pub fn field(name: &str) -> Field {
     Field {
         name: name.to_string(),
