@@ -3,7 +3,9 @@ name = "vinyl-core"
 version = "0.0.1"
 description = "A convenience layer for the FoundationDB Record Layer"
 license = "MIT"
+readme = "./readme.md"
 authors = ["maxmcd <m@xmcd.me>"]
+documentation = "https://docs.rs/vinyl-core/"
 homepage = "https://github.com/embly/vinyl"
 edition = "2018"
 build = false
@@ -17,6 +19,8 @@ protoc-rust = {version = "2.0", optional = true}
 [features]
 build_protos = ["protoc-rust"]
 
+# run with:
+# cargo run --features="build_protos" --bin proto
 [[bin]]
 name = "proto"
 path = "build.rs"
