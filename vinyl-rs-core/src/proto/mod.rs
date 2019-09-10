@@ -1,2 +1,5 @@
-pub mod transport;
+//! proto definitions
+//!
+
 pub mod example;
+pub mod transport;

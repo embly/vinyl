@@ -1,35 +1,19 @@
 //! define complex queries
 //!
-//! ```no_run
-//! use vinyl::{Record, query};
-//! use vinyl::query::field;
-//! use failure::Error;
-//! use protobuf::Message;
+//! ```rust
+//! use vinyl_core::query::field;
 //! use vinyl_core::proto::example;
 //! use vinyl_core::proto::example::Flower;
 //!
-//! fn main() -> Result<(), Error> {
-//!     let db = vinyl::ConnectionBuilder::new(
-//!         "vinyl://max:password@localhost:8090/foo",
-//!         example::file_descriptor_proto().write_to_bytes().unwrap(),
-//!     )
-//!     .add_record(Record::new::<Flower>("order_id"))
-//!     .connect()?;
-//!
-//!     let flowers: Vec<Flower> = db.execute_query(
-//!         field("price").less_than(50) &
-//!         field("flower").matches(
-//!             field("type").equals("ROSE")
-//!         )
-//!     )?;
-//!     println!("{:?}", flowers);
-//!     Ok(())
-//! }
+//!let query = field("price").less_than(50) &
+//!    field("flower").matches(
+//!        field("type").equals("ROSE")
+//!    );
 //!```
 
-use crate::ToValue;
+use crate::proto::transport;
+use crate::to_value::ToValue;
 use protobuf::RepeatedField;
-use vinyl_core::proto::transport;
 
 use std::ops;
 
@@ -37,7 +21,8 @@ use std::ops;
 /// Query is not used directly except for in the case of `Query::not`
 #[derive(Debug, PartialEq)]
 pub struct Query {
-    pub(crate) qc: transport::QueryComponent,
+    /// the underlyingproto QueryComponent
+    pub qc: transport::QueryComponent,
 }
 impl Query {
     fn add_field_value<T: ToValue>(mut self, value: T) -> Self {
@@ -56,7 +41,7 @@ impl Query {
     }
     /// Check that a set of components all evaluate to true for a given record.
     /// ```rust
-    /// use vinyl::query::field;
+    /// use vinyl_core::query::field;
     ///
     /// field("price")
     ///     .equals(4.3)
@@ -71,7 +56,7 @@ impl Query {
     }
     /// Negate a component test
     /// ```rust
-    /// use vinyl::query::{field, Query};
+    /// use vinyl_core::query::{field, Query};
     ///
     /// let query = Query::not(
     ///     field("price").equals(4.3),

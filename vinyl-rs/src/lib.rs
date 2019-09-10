@@ -30,83 +30,30 @@
 /// protobuf generated files
 pub mod proto;
 
-/// query...
-pub mod query;
+pub use vinyl_core::query;
+pub use vinyl_core::to_value::ToValue;
 
 #[macro_use]
 extern crate failure;
 
 use failure::Error;
 use grpc::ClientStubExt;
-use vinyl_core::proto::transport::{
-    FieldOptions, FieldOptions_DefaultValue, FieldOptions_IndexOption, Insert, LoginRequest, Query,
-    Query_QueryType, Record as ProtoRecord, RecordQuery, Request, Response, Value, Value_ValueType,
-};
 use proto::transport_grpc::{Vinyl, VinylClient};
 use protobuf;
 use protobuf::descriptor::{DescriptorProto, FieldDescriptorProto, FileDescriptorProto};
 use protobuf::{parse_from_bytes, Message, RepeatedField};
 use std::collections::HashMap;
 use url::Url;
+use vinyl_core::proto::transport::{
+    FieldOptions, FieldOptions_DefaultValue, FieldOptions_IndexOption, Insert, LoginRequest, Query,
+    Query_QueryType, Record as ProtoRecord, RecordQuery, Request, Response,
+};
 
 /// An instance of the vinyl DB. Holds metadata and a connection to the database server
 pub struct DB {
     client: VinylClient,
     token: String,
 }
-
-/// ToValue is implemented for all rust types that can be converted to protobuf values
-pub trait ToValue {
-    /// outputs the appropriate protobuf record value
-    fn to_value(self) -> Value;
-}
-
-macro_rules! impl_value {
-    ($ty:ident, $field:ident, $value_type:ident) => {
-        impl ToValue for $ty {
-            fn to_value(self) -> Value {
-                let mut v = Value::new();
-                v.$field(self);
-                v.set_value_type(Value_ValueType::$value_type);
-                v
-            }
-        }
-    };
-}
-
-// special case
-impl ToValue for usize {
-    fn to_value(self) -> Value {
-        let mut v = Value::new();
-        v.int64 = self as i64;
-        v.set_value_type(Value_ValueType::INT64);
-        v
-    }
-}
-
-impl ToValue for Vec<u8> {
-    fn to_value(self) -> Value {
-        let mut v = Value::new();
-        v.bytes = self;
-        v.set_value_type(Value_ValueType::BYTES);
-        v
-    }
-}
-
-impl ToValue for &str {
-    fn to_value(self) -> Value {
-        let mut v = Value::new();
-        v.string = self.to_string();
-        v.set_value_type(Value_ValueType::STRING);
-        v
-    }
-}
-
-impl_value!(f64, set_double, DOUBLE);
-impl_value!(f32, set_float, FLOAT);
-impl_value!(i32, set_int32, INT32);
-impl_value!(bool, set_bool, BOOL);
-impl_value!(String, set_string, STRING);
 
 impl DB {
     /// insert a record
