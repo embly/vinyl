@@ -2,8 +2,8 @@
 //!
 //!
 //! ```no_run
-//! use embly::Future;
 //! use failure::Error;
+//! use embly::prelude::*;
 //! use vinyl_embly::query::field;
 //! use vinyl_embly::DB;
 //!
@@ -66,7 +66,7 @@ pub use vinyl_core::query;
 pub use vinyl_core::DefaultValue;
 pub use vinyl_core::ToValue;
 
-use embly::{spawn_function, Conn, Future};
+use embly::{spawn_function, Conn, Waitable};
 use failure::{err_msg, Error};
 use protobuf::{parse_from_bytes, Message};
 use std::io::Read;
@@ -82,13 +82,12 @@ fn as_u32_le(array: &[u8]) -> u32 {
         | (u32::from(array[3]) << 24)
 }
 
-struct ProtoResponseFuture {
+struct ProtoResponseWaitable {
     conn: Conn,
 }
 
-impl Future for ProtoResponseFuture {
-    type Error = Error;
-    type Item = Response;
+impl Waitable for ProtoResponseWaitable {
+    type Output = Result<Response, Error>;
 
     fn id(&self) -> i32 {
         self.conn.id()
@@ -123,13 +122,12 @@ impl Future for ProtoResponseFuture {
 
 /// a future that returns records
 pub struct RecordsFuture<T> {
-    response: ProtoResponseFuture,
+    response: ProtoResponseWaitable,
     phantom: PhantomData<T>,
 }
 
-impl<T: Message> Future for RecordsFuture<T> {
-    type Error = Error;
-    type Item = Vec<T>;
+impl<T: Message> Waitable for RecordsFuture<T> {
+    type Output = Result<Vec<T>, Error>;
 
     fn id(&self) -> i32 {
         self.response.id()
@@ -146,14 +144,13 @@ impl<T: Message> Future for RecordsFuture<T> {
 }
 
 /// record future
-pub struct RecordFuture<T> {
-    response: ProtoResponseFuture,
+pub struct RecordWaitable<T> {
+    response: ProtoResponseWaitable,
     record: T,
 }
 
-impl<T: Message> Future for RecordFuture<T> {
-    type Error = Error;
-    type Item = T;
+impl<T: Message> Waitable for RecordWaitable<T> {
+    type Output = Result<T, Error>;
 
     fn id(&self) -> i32 {
         self.response.id()
@@ -165,13 +162,12 @@ impl<T: Message> Future for RecordFuture<T> {
 }
 
 /// a future for an empty response
-pub struct ResponseFuture {
-    response: ProtoResponseFuture,
+pub struct ResponseWaitable {
+    response: ProtoResponseWaitable,
 }
 
-impl Future for ResponseFuture {
-    type Error = Error;
-    type Item = ();
+impl Waitable for ResponseWaitable {
+    type Output = Result<(), Error>;
 
     fn id(&self) -> i32 {
         self.response.id()
@@ -212,10 +208,10 @@ impl DB {
     }
 
     /// asdf
-    pub fn insert<T: Message>(&self, msg: T) -> Result<RecordFuture<T>, Error> {
+    pub fn insert<T: Message>(&self, msg: T) -> Result<RecordWaitable<T>, Error> {
         let (msg, req) = vinyl_core::insert_request::<T>(msg)?;
         let response = self.send_request(req)?;
-        Ok(RecordFuture {
+        Ok(RecordWaitable {
             response,
             record: msg,
         })
@@ -225,17 +221,17 @@ impl DB {
     pub fn delete_record<T: protobuf::Message, K: ToValue>(
         &self,
         pk: K,
-    ) -> Result<ResponseFuture, Error> {
+    ) -> Result<ResponseWaitable, Error> {
         let req = vinyl_core::delete_record::<T, K>(pk);
         let resp = self.send_request(req)?;
-        Ok(ResponseFuture { response: resp })
+        Ok(ResponseWaitable { response: resp })
     }
 
-    fn send_request(&self, mut req: Request) -> Result<ProtoResponseFuture, Error> {
+    fn send_request(&self, mut req: Request) -> Result<ProtoResponseWaitable, Error> {
         let mut conn = spawn_function(&format!("embly/vinyl/{}", self.name))?;
         req.set_token(self.session_token.clone());
         conn.write_all(&req.write_to_bytes()?)?;
-        Ok(ProtoResponseFuture { conn: conn })
+        Ok(ProtoResponseWaitable { conn: conn })
     }
 }
 

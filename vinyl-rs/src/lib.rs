@@ -42,6 +42,7 @@ use grpc::ClientStubExt;
 use proto::transport_grpc::{Vinyl, VinylClient};
 use protobuf;
 use protobuf::parse_from_bytes;
+use protobuf::Message as _;
 use url::Url;
 use vinyl_core::proto::transport::{Request, Response};
 
@@ -73,6 +74,14 @@ impl DB {
         let req = vinyl_core::delete_record::<T, K>(pk);
         self.send_request(req)?;
         Ok(())
+    }
+
+    /// send a request using bytes that can be marshalled into a Request protobuf message
+    pub fn send_raw_request(&self, request_bytes: Vec<u8>) -> Result<Vec<u8>, Error> {
+        let request: Request = parse_from_bytes(&request_bytes)?;
+        let result = self.send_request(request)?;
+        // TODO: access raw grpc bytes to prevent double unmarshalling
+        Ok(result.write_to_bytes()?)
     }
 
     fn send_request(&self, mut req: Request) -> Result<Response, Error> {

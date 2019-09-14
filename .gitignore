@@ -6,3 +6,4 @@ fdb.cluster
 .metals
 .bloop
 *.iml
+Cargo.lock

@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 protobuf = "2.6.0"
 vinyl = {path = "../"}
-failure = "0.1.5"
+failure = {version = "~0.1", features = ["std"], default-features = false}
 
 
 [build-dependencies]
