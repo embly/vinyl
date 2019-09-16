@@ -54,7 +54,10 @@ object VinylServer {
 
   private val logger = Logger.getLogger(classOf[VinylServer].getName)
 
+
   def main(args: Array[String]): Unit = {
+    val db = FDBDatabaseFactory.instance().getDatabase().performNoOp() 
+    // println(s"got that $db")
     val server = new VinylServer(ExecutionContext.global)
     server.start()
     server.blockUntilShutdown()
@@ -413,6 +416,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
           case uniqueness: foundationdb.record.RecordIndexUniquenessViolation => {
             response = Response(error = uniqueness.getMessage)
           }
+          case default => println("Error commiting to db" + default)
         }
         context.close()
         println(s"got query request $req $response")

@@ -1,6 +1,7 @@
 package main
 
 import (
+	fmt "fmt"
 	"testing"
 
 	vinyl "github.com/embly/vinyl/vinyl-go"
@@ -29,9 +30,11 @@ func TestBasic(t *testing.T) {
 		Id:    "whatever",
 		Email: "max@max.com",
 	}
+	fmt.Println("inserting")
 	if err := db.Insert(&user); err != nil {
 		t.Error(err)
 	}
+	fmt.Println("over")
 
 	user2 := User{
 		Id:    "whoever",

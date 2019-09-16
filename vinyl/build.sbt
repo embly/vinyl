@@ -89,3 +89,11 @@ PB.targets in Compile := Seq(
 // (optional) If you need scalapb/scalapb.proto or anything from
 // google/protobuf/*.proto
 // libraryDependencies += "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+
+
+assemblyMergeStrategy in assembly := {
+  case x if x.contains("io.netty.versions.properties") => MergeStrategy.discard
+  case x =>
+    val oldStrategy = (assemblyMergeStrategy in assembly).value
+    oldStrategy(x)
+}
