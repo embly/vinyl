@@ -1,2 +1,3 @@
 target
-vinyl/target
+./*/target
+./*/*/target
