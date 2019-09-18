@@ -74,6 +74,9 @@ libraryDependencies += "org.typelevel" %% "cats-core" % "1.6.0"
 // To learn more about multi-project builds, head over to the official sbt
 // documentation at http://www.scala-sbt.org/documentation.html
 
+
+libraryDependencies ++= Seq("org.slf4j" % "slf4j-api" % "1.7.5", "org.slf4j" % "slf4j-simple" % "1.7.5")
+                            
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 
 libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.7.74.0"
