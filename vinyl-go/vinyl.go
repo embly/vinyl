@@ -71,7 +71,7 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 	if u.Port() != "" {
 		db.hostname += ":" + u.Port()
 	}
-
+	fmt.Println(db.hostname)
 	conn, err := grpc.Dial(db.hostname, grpc.WithInsecure())
 	if err != nil {
 		return
@@ -112,13 +112,14 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		}
 		loginRequest.Records = append(loginRequest.Records, &record)
 	}
-
+	fmt.Println("do I get here?")
 	b, err := descriptor.AddRecordTypeUnion(metadata.Descriptor, recordNames)
 	if err != nil {
 		err = errors.Wrap(err, "error parsing descriptor")
 		return
 	}
 	loginRequest.FileDescriptor = b
+	fmt.Println("here?", loginRequest)
 	resp, err := client.Login(context.Background(), &loginRequest)
 	if err != nil {
 		return

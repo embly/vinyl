@@ -30,6 +30,8 @@ func AddRecordTypeUnion(descriptorBytes []byte, records []string) (out []byte, e
 	}
 	zr.Close()
 	fdp := pb.FileDescriptorProto{}
+	// TODO add validation. It seems like we can be passed avalid descriptor with no records.
+	// at the very least confirm that there are records for each record name passed
 	if err = proto.Unmarshal(b, &fdp); err != nil {
 		err = errors.Wrap(err, "error unmarshaling the descriptor, is it the right format?")
 		return
