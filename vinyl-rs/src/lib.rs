@@ -98,6 +98,7 @@ impl DB {
 /// build connection details and metadata before connecting to the database server
 pub struct ConnectionBuilder {
     connection_string: String,
+    token: String,
     descriptor_bytes: Vec<u8>,
     records: Vec<Record>,
 }
@@ -108,6 +109,17 @@ impl ConnectionBuilder {
         Self {
             records: Vec::new(),
             descriptor_bytes,
+            connection_string: connection_string.to_string(),
+            token: String::new(),
+        }
+    }
+
+    /// join an existing session
+    pub fn new_with_existing_session(connection_string: &str, token: &str) -> Self {
+        Self {
+            records: Vec::new(),
+            descriptor_bytes: Vec::new(),
+            token: token.to_string(),
             connection_string: connection_string.to_string(),
         }
     }
@@ -127,25 +139,27 @@ impl ConnectionBuilder {
         let client =
             VinylClient::new_plain(&addr.ip().to_string(), addr.port(), Default::default())?;
 
-        let keyspace = url.path();
-        let username = url.username();
-        let password = url
-            .password()
-            .ok_or_else(|| format_err!("No password provided"))?;
+        let token = if self.token.is_empty() {
+            let keyspace = url.path();
+            let username = url.username();
+            let password = url
+                .password()
+                .ok_or_else(|| format_err!("No password provided"))?;
 
-        let login_request = vinyl_core::construct_login_request(
-            self.descriptor_bytes,
-            self.records,
-            username,
-            password,
-            keyspace,
-        )?;
-        let resp = client.login(grpc::RequestOptions::new(), login_request);
-        let (_, login_response, _) = resp.wait()?;
+            let login_request = vinyl_core::construct_login_request(
+                self.descriptor_bytes,
+                self.records,
+                username,
+                password,
+                keyspace,
+            )?;
+            let resp = client.login(grpc::RequestOptions::new(), login_request);
+            let (_, login_response, _) = resp.wait()?;
+            login_response.token
+        } else {
+            self.token
+        };
 
-        Ok(DB {
-            client,
-            token: login_response.token,
-        })
+        Ok(DB { client, token })
     }
 }
