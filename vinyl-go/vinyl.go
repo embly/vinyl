@@ -22,7 +22,7 @@ type DB struct {
 	client   transport.VinylClient
 	grpcConn *grpc.ClientConn
 	hostname string
-	token    string
+	Token    string
 }
 
 // Record defines a Record Layer record type
@@ -128,7 +128,7 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		err = errors.New(resp.Error)
 		return
 	}
-	db.token = resp.Token
+	db.Token = resp.Token
 	return
 }
 
@@ -160,8 +160,7 @@ func (db *DB) executeQuery(recordType string, query qm.QueryComponent, queryProp
 			RecordType:  recordType,
 		},
 	}
-	fmt.Println(request)
-	return db.sendRequest(request, "")
+	return db.sendRequest(request)
 }
 
 // LoadRecord loads a single record using its primary key value. You must pass a struct of the
@@ -183,7 +182,7 @@ func (db *DB) LoadRecord(msg proto.Message, pk interface{}) (err error) {
 			RecordType: proto.MessageName(msg),
 		},
 	}
-	resp, err := db.sendRequest(request, "")
+	resp, err := db.sendRequest(request)
 	if err != nil {
 		return err
 	}
@@ -212,7 +211,7 @@ func (db *DB) DeleteRecord(msg proto.Message, pk interface{}) (err error) {
 			RecordType: proto.MessageName(msg),
 		},
 	}
-	if _, err := db.sendRequest(request, ""); err != nil {
+	if _, err := db.sendRequest(request); err != nil {
 		return err
 	}
 	return nil
@@ -236,7 +235,7 @@ func (db *DB) DeleteWhere(msg proto.Message, query qm.QueryComponent) (err error
 			RecordQuery: &rq,
 		},
 	}
-	if _, err := db.sendRequest(request, ""); err != nil {
+	if _, err := db.sendRequest(request); err != nil {
 		return err
 	}
 	return nil
@@ -305,13 +304,13 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 		Record: proto.MessageName(msg),
 		Data:   b,
 	})
-	_, err = db.sendRequest(request, "")
+	_, err = db.sendRequest(request)
 	return
 }
 
-func (db *DB) sendRequest(query transport.Request, path string) (respProto *transport.Response, err error) {
-	query.Token = db.token
-	respProto, err = db.client.Query(context.Background(), &query)
+func (db *DB) sendRequest(request transport.Request) (respProto *transport.Response, err error) {
+	request.Token = db.Token
+	respProto, err = db.client.Query(context.Background(), &request)
 	if err != nil {
 		return
 	}
@@ -319,4 +318,15 @@ func (db *DB) sendRequest(query transport.Request, path string) (respProto *tran
 		err = errors.New(respProto.Error)
 	}
 	return
+}
+
+// SendRawRequest takes the raw bytes of a proto request and sends it to the vinylserver
+func (db *DB) SendRawRequest(request []byte) (respProto *transport.Response, err error) {
+	// TODO: send raw bytes through the client so we don't have to bear this
+	// double marshalling cost
+	reqProto := transport.Request{}
+	if err = proto.Unmarshal(request, &reqProto); err != nil {
+		return
+	}
+	return db.sendRequest(reqProto)
 }
