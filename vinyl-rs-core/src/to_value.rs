@@ -51,6 +51,7 @@ impl ToValue for &str {
 
 impl_value!(f64, set_double, DOUBLE);
 impl_value!(f32, set_float, FLOAT);
+impl_value!(i64, set_int64, INT64);
 impl_value!(i32, set_int32, INT32);
 impl_value!(bool, set_bool, BOOL);
 impl_value!(String, set_string, STRING);

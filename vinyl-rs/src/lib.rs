@@ -59,6 +59,7 @@ impl DB {
         self.send_request(req)?;
         Ok(msg)
     }
+
     /// return records that match the provided query
     pub fn execute_query<T: protobuf::Message>(&self, q: query::Query) -> Result<Vec<T>, Error> {
         let req = vinyl_core::execute_query_request::<T>(q);
@@ -78,9 +79,9 @@ impl DB {
 
     /// send a request using bytes that can be marshalled into a Request protobuf message
     pub fn send_raw_request(&self, request_bytes: Vec<u8>) -> Result<Vec<u8>, Error> {
+        // TODO: access raw grpc bytes to prevent double unmarshalling
         let request: Request = parse_from_bytes(&request_bytes)?;
         let result = self.send_request(request)?;
-        // TODO: access raw grpc bytes to prevent double unmarshalling
         Ok(result.write_to_bytes()?)
     }
 
@@ -114,13 +115,13 @@ impl ConnectionBuilder {
         }
     }
 
-    /// join an existing session
-    pub fn new_with_existing_session(connection_string: &str, token: &str) -> Self {
+    /// new with token
+    pub fn new_with_token(connection_string: &str, token: &str) -> Self {
         Self {
             records: Vec::new(),
             descriptor_bytes: Vec::new(),
-            token: token.to_string(),
             connection_string: connection_string.to_string(),
+            token: token.to_string(),
         }
     }
     /// add record data

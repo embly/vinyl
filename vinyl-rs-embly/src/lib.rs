@@ -93,23 +93,9 @@ impl Waitable for ProtoResponseWaitable {
         self.conn.id()
     }
     fn fetch_result(&mut self) -> Result<Response, Error> {
-        let mut size_bytes: [u8; 4] = [0; 4];
-        self.conn.read_exact(&mut size_bytes)?;
-        let size = as_u32_le(&size_bytes) as usize;
-        let mut read = 0;
-        let mut msg_bytes = vec![0; size];
-        loop {
-            let ln = self.conn.read(&mut msg_bytes[read..])?;
-            read += ln;
-            println!(
-                "reading msg {:?}",
-                (ln, msg_bytes[read..].len(), read, size)
-            );
-            if ln == 0 || read == size {
-                break;
-            }
-        }
-        let mut response: Response = parse_from_bytes(&msg_bytes)?;
+        let mut buffer = Vec::new();
+        self.conn.read_to_end(&mut buffer)?;
+        let mut response: Response = parse_from_bytes(&buffer)?;
         // response
         let err = response.take_error();
         if !err.is_empty() {
@@ -228,7 +214,7 @@ impl DB {
     }
 
     fn send_request(&self, mut req: Request) -> Result<ProtoResponseWaitable, Error> {
-        let mut conn = spawn_function(&format!("embly/vinyl/{}", self.name))?;
+        let mut conn = spawn_function(&format!("embly/vinyl/{}/request", self.name))?;
         req.set_token(self.session_token.clone());
         conn.write_all(&req.write_to_bytes()?)?;
         Ok(ProtoResponseWaitable { conn: conn })
