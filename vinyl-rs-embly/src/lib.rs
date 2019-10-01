@@ -75,13 +75,6 @@ use std::marker::PhantomData;
 use std::str;
 use vinyl_core::proto::transport::{Request, Response};
 
-fn as_u32_le(array: &[u8]) -> u32 {
-    u32::from(array[0])
-        | (u32::from(array[1]) << 8)
-        | (u32::from(array[2]) << 16)
-        | (u32::from(array[3]) << 24)
-}
-
 struct ProtoResponseWaitable {
     conn: Conn,
 }
@@ -123,16 +116,34 @@ impl<T: Message> Waitable for RecordsFuture<T> {
         let resp = self.response.wait()?;
         let mut v: Vec<T> = Vec::new();
         for record in resp.get_records().iter() {
-            v.push(parse_from_bytes(record).unwrap());
+            v.push(parse_from_bytes(record)?);
         }
         Ok(v)
+    }
+}
+
+/// returns an empty value on success
+pub struct EmptyRecordWaitable {
+    response: ProtoResponseWaitable,
+}
+
+impl Waitable for EmptyRecordWaitable {
+    type Output = Result<(), Error>;
+
+    fn id(&self) -> i32 {
+        self.response.id()
+    }
+
+    fn fetch_result(&mut self) -> Result<(), Error> {
+        self.response.wait()?;
+        Ok(())
     }
 }
 
 /// record future
 pub struct RecordWaitable<T> {
     response: ProtoResponseWaitable,
-    record: T,
+    phantom: PhantomData<T>,
 }
 
 impl<T: Message> Waitable for RecordWaitable<T> {
@@ -142,8 +153,12 @@ impl<T: Message> Waitable for RecordWaitable<T> {
         self.response.id()
     }
     fn fetch_result(&mut self) -> Result<T, Error> {
-        self.response.wait()?;
-        Ok(::std::mem::replace(&mut self.record, T::new()))
+        let resp = self.response.wait()?;
+        let record = match resp.get_records().first() {
+            Some(record) => record,
+            None => return Err(err_msg("no record found")),
+        };
+        Ok(parse_from_bytes(record)?)
     }
 }
 
@@ -194,20 +209,24 @@ impl DB {
     }
 
     /// asdf
-    pub fn insert<T: Message>(&self, msg: T) -> Result<RecordWaitable<T>, Error> {
-        let (msg, req) = vinyl_core::insert_request::<T>(msg)?;
+    pub fn insert<T: Message>(&self, msg: T) -> Result<EmptyRecordWaitable, Error> {
+        let req = vinyl_core::insert_request::<T>(msg)?;
+        let response = self.send_request(req)?;
+        Ok(EmptyRecordWaitable { response })
+    }
+
+    /// asdf
+    pub fn load_record<T: Message, K: ToValue>(&self, pk: K) -> Result<RecordWaitable<T>, Error> {
+        let req = vinyl_core::load_record::<T, K>(pk);
         let response = self.send_request(req)?;
         Ok(RecordWaitable {
             response,
-            record: msg,
+            phantom: PhantomData,
         })
     }
 
     /// delete records that match the provided query
-    pub fn delete_record<T: protobuf::Message, K: ToValue>(
-        &self,
-        pk: K,
-    ) -> Result<ResponseWaitable, Error> {
+    pub fn delete_record<T: Message, K: ToValue>(&self, pk: K) -> Result<ResponseWaitable, Error> {
         let req = vinyl_core::delete_record::<T, K>(pk);
         let resp = self.send_request(req)?;
         Ok(ResponseWaitable { response: resp })

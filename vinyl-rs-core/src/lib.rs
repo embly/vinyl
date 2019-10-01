@@ -44,7 +44,7 @@ use std::collections::HashMap;
 pub use to_value::ToValue;
 
 /// construct an insertion request from a message
-pub fn insert_request<T: Message>(msg: T) -> Result<(T, Request), Error> {
+pub fn insert_request<T: Message>(msg: T) -> Result<Request, Error> {
     let mut req = Request::new();
     let mut insertions: RepeatedField<Insert> = RepeatedField::new();
     let mut insert = Insert::new();
@@ -52,7 +52,7 @@ pub fn insert_request<T: Message>(msg: T) -> Result<(T, Request), Error> {
     insert.set_data(msg.write_to_bytes()?);
     insertions.push(insert);
     req.set_insertions(insertions);
-    Ok((msg, req))
+    Ok(req)
 }
 
 /// construct a request for a query execution
@@ -72,6 +72,17 @@ pub fn execute_query_request<T: Message>(q: query::Query) -> Request {
 pub fn delete_record<T: Message, K: ToValue>(pk: K) -> Request {
     let mut query = Query::new();
     query.set_query_type(Query_QueryType::DELETE_RECORD);
+    query.set_primary_key(pk.to_value());
+    query.set_record_type(T::default_instance().descriptor().name().to_string());
+    let mut req = Request::new();
+    req.set_query(query);
+    req
+}
+
+/// load a single record by primary key
+pub fn load_record<T: Message, K: ToValue>(pk: K) -> Request {
+    let mut query = Query::new();
+    query.set_query_type(Query_QueryType::LOAD_RECORD);
     query.set_primary_key(pk.to_value());
     query.set_record_type(T::default_instance().descriptor().name().to_string());
     let mut req = Request::new();
