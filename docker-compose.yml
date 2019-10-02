@@ -10,6 +10,7 @@ services:
     environment:
       - HOST_IP=0.0.0.0
   client:
+    image: internal/vinyl-client
     build:
       context: .
       dockerfile: ./fdb/client.Dockerfile
@@ -22,6 +23,13 @@ services:
     volumes:
       - ./vinyl:/opt/app
       - ivycache:/root/.ivy2/cache
-
+  standalone:
+    image: embly/vinyl
+    ports:
+      - 4500:4500
+      - 8090:8090
+    build:
+      context: .
+      dockerfile: ./fdb/standalone.Dockerfile
 volumes:
   ivycache: {}

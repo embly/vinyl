@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+message Order {
+    int64 order_id = 1;
+    Flower flower = 2;
+    int32 price = 3;
+}
+
+message Flower {
+    string type = 1;
+    Color color = 2;
+}
+
+enum Color {
+    RED = 0;
+    BLUE = 1;
+    YELLOW = 2;
+    PINK = 3;
+}

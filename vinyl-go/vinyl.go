@@ -3,9 +3,10 @@ package vinyl
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/embly/vinyl/vinyl-go/descriptor"
 	"github.com/embly/vinyl/vinyl-go/qm"
@@ -15,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 )
 
+// ErrNoRows no rows were returned
 var ErrNoRows = errors.New("vinyl: no rows in result set")
 
 // DB is an instance of a connection to the Record Layer database
@@ -22,7 +24,7 @@ type DB struct {
 	client   transport.VinylClient
 	grpcConn *grpc.ClientConn
 	hostname string
-	token    string
+	Token    string
 }
 
 // Record defines a Record Layer record type
@@ -71,7 +73,6 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 	if u.Port() != "" {
 		db.hostname += ":" + u.Port()
 	}
-
 	conn, err := grpc.Dial(db.hostname, grpc.WithInsecure())
 	if err != nil {
 		return
@@ -112,7 +113,6 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		}
 		loginRequest.Records = append(loginRequest.Records, &record)
 	}
-
 	b, err := descriptor.AddRecordTypeUnion(metadata.Descriptor, recordNames)
 	if err != nil {
 		err = errors.Wrap(err, "error parsing descriptor")
@@ -127,7 +127,7 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		err = errors.New(resp.Error)
 		return
 	}
-	db.token = resp.Token
+	db.Token = resp.Token
 	return
 }
 
@@ -159,8 +159,7 @@ func (db *DB) executeQuery(recordType string, query qm.QueryComponent, queryProp
 			RecordType:  recordType,
 		},
 	}
-	fmt.Println(request)
-	return db.sendRequest(request, "")
+	return db.SendRequest(request)
 }
 
 // LoadRecord loads a single record using its primary key value. You must pass a struct of the
@@ -182,7 +181,7 @@ func (db *DB) LoadRecord(msg proto.Message, pk interface{}) (err error) {
 			RecordType: proto.MessageName(msg),
 		},
 	}
-	resp, err := db.sendRequest(request, "")
+	resp, err := db.SendRequest(request)
 	if err != nil {
 		return err
 	}
@@ -211,12 +210,13 @@ func (db *DB) DeleteRecord(msg proto.Message, pk interface{}) (err error) {
 			RecordType: proto.MessageName(msg),
 		},
 	}
-	if _, err := db.sendRequest(request, ""); err != nil {
+	if _, err := db.SendRequest(request); err != nil {
 		return err
 	}
 	return nil
 }
 
+// DeleteWhere deletes records that match a query
 func (db *DB) DeleteWhere(msg proto.Message, query qm.QueryComponent) (err error) {
 	rq := transport.RecordQuery{}
 	if qc, ok := query.(qm.QueryComponent); ok {
@@ -235,7 +235,7 @@ func (db *DB) DeleteWhere(msg proto.Message, query qm.QueryComponent) (err error
 			RecordQuery: &rq,
 		},
 	}
-	if _, err := db.sendRequest(request, ""); err != nil {
+	if _, err := db.SendRequest(request); err != nil {
 		return err
 	}
 	return nil
@@ -304,13 +304,34 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 		Record: proto.MessageName(msg),
 		Data:   b,
 	})
-	_, err = db.sendRequest(request, "")
+	_, err = db.SendRequest(request)
 	return
 }
 
-func (db *DB) sendRequest(query transport.Request, path string) (respProto *transport.Response, err error) {
-	query.Token = db.token
-	respProto, err = db.client.Query(context.Background(), &query)
+// RequestDescription returns debug information about the query or insertion request
+func RequestDescription(request *transport.Request) string {
+	var sb strings.Builder
+	insertLen := len(request.Insertions)
+	if insertLen > 0 {
+		sb.WriteString("Inserted ")
+		sb.WriteString(strconv.Itoa(insertLen))
+		sb.WriteString(" \"")
+		sb.WriteString(request.Insertions[0].Record)
+		sb.WriteString("\" record")
+		if insertLen != 1 {
+			sb.WriteString("s")
+		}
+	}
+	if (request.Query) != nil {
+		sb.WriteString("Query")
+	}
+	return sb.String()
+}
+
+// SendRequest allows direct sending of a request proto struct
+func (db *DB) SendRequest(request transport.Request) (respProto *transport.Response, err error) {
+	request.Token = db.Token
+	respProto, err = db.client.Query(context.Background(), &request)
 	if err != nil {
 		return
 	}
@@ -318,4 +339,15 @@ func (db *DB) sendRequest(query transport.Request, path string) (respProto *tran
 		err = errors.New(respProto.Error)
 	}
 	return
+}
+
+// SendRawRequest takes the raw bytes of a proto request and sends it to the vinylserver
+func (db *DB) SendRawRequest(request []byte) (respProto *transport.Response, err error) {
+	// TODO: send raw bytes through the client so we don't have to bear this
+	// double marshalling cost
+	reqProto := transport.Request{}
+	if err = proto.Unmarshal(request, &reqProto); err != nil {
+		return
+	}
+	return db.SendRequest(reqProto)
 }

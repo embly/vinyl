@@ -1,0 +1,19 @@
+[package]
+name = "vinyl-embly"
+version = "0.0.2"
+license = "MIT"
+homepage = "https://github.com/embly/vinyl"
+description = "it's vinyl for embly"
+documentation = "https://docs.rs/vinyl-embly/"
+authors = ["maxmcd <m@xmcd.me>"]
+edition = "2018"
+
+[dependencies]
+protobuf = "~2"
+url = "2.1.0"
+# embly = { path = "../../../../../../embly/embly-rs" }
+embly = "0.0.4"
+failure = {version = "~0.1", features = ["std"], default-features = false}
+vinyl-core = "0.0.2"
+# vinyl-core = { path = "../vinyl-rs-core" }
+

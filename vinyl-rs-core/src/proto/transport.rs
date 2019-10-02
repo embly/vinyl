@@ -1066,6 +1066,7 @@ pub struct FieldOptions {
     // message fields
     pub primary_key: bool,
     pub index: ::protobuf::SingularPtrField<FieldOptions_IndexOption>,
+    pub default_value: FieldOptions_DefaultValue,
     // special fields
     pub unknown_fields: ::protobuf::UnknownFields,
     pub cached_size: ::protobuf::CachedSize,
@@ -1129,6 +1130,21 @@ impl FieldOptions {
     pub fn take_index(&mut self) -> FieldOptions_IndexOption {
         self.index.take().unwrap_or_else(|| FieldOptions_IndexOption::new())
     }
+
+    // .vinyl.FieldOptions.DefaultValue default_value = 20;
+
+
+    pub fn get_default_value(&self) -> FieldOptions_DefaultValue {
+        self.default_value
+    }
+    pub fn clear_default_value(&mut self) {
+        self.default_value = FieldOptions_DefaultValue::NULL;
+    }
+
+    // Param is passed by value, moved
+    pub fn set_default_value(&mut self, v: FieldOptions_DefaultValue) {
+        self.default_value = v;
+    }
 }
 
 impl ::protobuf::Message for FieldOptions {
@@ -1155,6 +1171,9 @@ impl ::protobuf::Message for FieldOptions {
                 3 => {
                     ::protobuf::rt::read_singular_message_into(wire_type, is, &mut self.index)?;
                 },
+                20 => {
+                    ::protobuf::rt::read_proto3_enum_with_unknown_fields_into(wire_type, is, &mut self.default_value, 20, &mut self.unknown_fields)?
+                },
                 _ => {
                     ::protobuf::rt::read_unknown_or_skip_group(field_number, wire_type, is, self.mut_unknown_fields())?;
                 },
@@ -1174,6 +1193,9 @@ impl ::protobuf::Message for FieldOptions {
             let len = v.compute_size();
             my_size += 1 + ::protobuf::rt::compute_raw_varint32_size(len) + len;
         }
+        if self.default_value != FieldOptions_DefaultValue::NULL {
+            my_size += ::protobuf::rt::enum_size(20, self.default_value);
+        }
         my_size += ::protobuf::rt::unknown_fields_size(self.get_unknown_fields());
         self.cached_size.set(my_size);
         my_size
@@ -1187,6 +1209,9 @@ impl ::protobuf::Message for FieldOptions {
             os.write_tag(3, ::protobuf::wire_format::WireTypeLengthDelimited)?;
             os.write_raw_varint32(v.get_cached_size())?;
             v.write_to_with_cached_sizes(os)?;
+        }
+        if self.default_value != FieldOptions_DefaultValue::NULL {
+            os.write_enum(20, self.default_value.value())?;
         }
         os.write_unknown_fields(self.get_unknown_fields())?;
         ::std::result::Result::Ok(())
@@ -1240,6 +1265,11 @@ impl ::protobuf::Message for FieldOptions {
                     |m: &FieldOptions| { &m.index },
                     |m: &mut FieldOptions| { &mut m.index },
                 ));
+                fields.push(::protobuf::reflect::accessor::make_simple_field_accessor::<_, ::protobuf::types::ProtobufTypeEnum<FieldOptions_DefaultValue>>(
+                    "default_value",
+                    |m: &FieldOptions| { &m.default_value },
+                    |m: &mut FieldOptions| { &mut m.default_value },
+                ));
                 ::protobuf::reflect::MessageDescriptor::new::<FieldOptions>(
                     "FieldOptions",
                     fields,
@@ -1264,6 +1294,7 @@ impl ::protobuf::Clear for FieldOptions {
     fn clear(&mut self) {
         self.primary_key = false;
         self.index.clear();
+        self.default_value = FieldOptions_DefaultValue::NULL;
         self.unknown_fields.clear();
     }
 }
@@ -1481,6 +1512,67 @@ impl ::std::fmt::Debug for FieldOptions_IndexOption {
 impl ::protobuf::reflect::ProtobufValue for FieldOptions_IndexOption {
     fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
         ::protobuf::reflect::ProtobufValueRef::Message(self)
+    }
+}
+
+#[derive(Clone,PartialEq,Eq,Debug,Hash)]
+pub enum FieldOptions_DefaultValue {
+    NULL = 0,
+    NOW = 1,
+    NOW_ON_UPDATE = 2,
+    UUID = 3,
+}
+
+impl ::protobuf::ProtobufEnum for FieldOptions_DefaultValue {
+    fn value(&self) -> i32 {
+        *self as i32
+    }
+
+    fn from_i32(value: i32) -> ::std::option::Option<FieldOptions_DefaultValue> {
+        match value {
+            0 => ::std::option::Option::Some(FieldOptions_DefaultValue::NULL),
+            1 => ::std::option::Option::Some(FieldOptions_DefaultValue::NOW),
+            2 => ::std::option::Option::Some(FieldOptions_DefaultValue::NOW_ON_UPDATE),
+            3 => ::std::option::Option::Some(FieldOptions_DefaultValue::UUID),
+            _ => ::std::option::Option::None
+        }
+    }
+
+    fn values() -> &'static [Self] {
+        static values: &'static [FieldOptions_DefaultValue] = &[
+            FieldOptions_DefaultValue::NULL,
+            FieldOptions_DefaultValue::NOW,
+            FieldOptions_DefaultValue::NOW_ON_UPDATE,
+            FieldOptions_DefaultValue::UUID,
+        ];
+        values
+    }
+
+    fn enum_descriptor_static() -> &'static ::protobuf::reflect::EnumDescriptor {
+        static mut descriptor: ::protobuf::lazy::Lazy<::protobuf::reflect::EnumDescriptor> = ::protobuf::lazy::Lazy {
+            lock: ::protobuf::lazy::ONCE_INIT,
+            ptr: 0 as *const ::protobuf::reflect::EnumDescriptor,
+        };
+        unsafe {
+            descriptor.get(|| {
+                ::protobuf::reflect::EnumDescriptor::new("FieldOptions_DefaultValue", file_descriptor_proto())
+            })
+        }
+    }
+}
+
+impl ::std::marker::Copy for FieldOptions_DefaultValue {
+}
+
+impl ::std::default::Default for FieldOptions_DefaultValue {
+    fn default() -> Self {
+        FieldOptions_DefaultValue::NULL
+    }
+}
+
+impl ::protobuf::reflect::ProtobufValue for FieldOptions_DefaultValue {
+    fn as_ref(&self) -> ::protobuf::reflect::ProtobufValueRef {
+        ::protobuf::reflect::ProtobufValueRef::Enum(self.descriptor())
     }
 }
 
@@ -4062,53 +4154,56 @@ static file_descriptor_proto_data: &'static [u8] = b"\
     ions\x18\x01\x20\x03(\x0b2\x1f.vinyl.Record.FieldOptionsEntryR\x0cfieldO\
     ptions\x12\x12\n\x04name\x18\x02\x20\x01(\tR\x04name\x1aT\n\x11FieldOpti\
     onsEntry\x12\x10\n\x03key\x18\x01\x20\x01(\tR\x03key\x12)\n\x05value\x18\
-    \x02\x20\x01(\x0b2\x13.vinyl.FieldOptionsR\x05value:\x028\x01\"\xa1\x01\
+    \x02\x20\x01(\x0b2\x13.vinyl.FieldOptionsR\x05value:\x028\x01\"\xa8\x02\
     \n\x0cFieldOptions\x12\x1f\n\x0bprimary_key\x18\x02\x20\x01(\x08R\nprima\
     ryKey\x125\n\x05index\x18\x03\x20\x01(\x0b2\x1f.vinyl.FieldOptions.Index\
-    OptionR\x05index\x1a9\n\x0bIndexOption\x12\x12\n\x04type\x18\x01\x20\x01\
-    (\tR\x04type\x12\x16\n\x06unique\x18\x02\x20\x01(\x08R\x06unique\";\n\rL\
-    oginResponse\x12\x14\n\x05token\x18\x01\x20\x01(\tR\x05token\x12\x14\n\
-    \x05error\x18\x02\x20\x01(\tR\x05error\"\xe3\x02\n\x05Query\x125\n\x0cre\
-    cord_query\x18\x01\x20\x01(\x0b2\x12.vinyl.RecordQueryR\x0brecordQuery\
-    \x12G\n\x12execute_properties\x18\x04\x20\x01(\x0b2\x18.vinyl.ExecutePro\
-    pertiesR\x11executeProperties\x12-\n\x0bprimary_key\x18\x05\x20\x01(\x0b\
-    2\x0c.vinyl.ValueR\nprimaryKey\x125\n\nquery_type\x18\x03\x20\x01(\x0e2\
-    \x16.vinyl.Query.QueryTypeR\tqueryType\x12\x1f\n\x0brecord_type\x18\x06\
-    \x20\x01(\tR\nrecordType\"S\n\tQueryType\x12\x10\n\x0cRECORD_QUERY\x10\0\
-    \x12\x10\n\x0cDELETE_WHERE\x10\x01\x12\x11\n\rDELETE_RECORD\x10\x02\x12\
-    \x0f\n\x0bLOAD_RECORD\x10\x03\"<\n\x0bRecordQuery\x12-\n\x06filter\x18\
-    \x01\x20\x01(\x0b2\x15.vinyl.QueryComponentR\x06filter\"=\n\x11ExecutePr\
-    operties\x12\x14\n\x05limit\x18\x01\x20\x01(\x05R\x05limit\x12\x12\n\x04\
-    skip\x18\x02\x20\x01(\x05R\x04skip\"\x96\x02\n\x0eQueryComponent\x12+\n\
-    \x05child\x18\x01\x20\x01(\x0b2\x15.vinyl.QueryComponentR\x05child\x121\
-    \n\x08children\x18\x02\x20\x03(\x0b2\x15.vinyl.QueryComponentR\x08childr\
-    en\x12J\n\x0ecomponent_type\x18\x03\x20\x01(\x0e2#.vinyl.QueryComponent.\
-    ComponentTypeR\rcomponentType\x12\"\n\x05field\x18\x04\x20\x01(\x0b2\x0c\
-    .vinyl.FieldR\x05field\"4\n\rComponentType\x12\x07\n\x03AND\x10\0\x12\
-    \x06\n\x02OR\x10\x01\x12\x07\n\x03NOT\x10\x02\x12\t\n\x05FIELD\x10\x03\"\
-    \xa5\x02\n\x05Field\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04name\x12\"\
-    \n\x05value\x18\x02\x20\x01(\x0b2\x0c.vinyl.ValueR\x05value\x12A\n\x0eco\
-    mponent_type\x18\x03\x20\x01(\x0e2\x1a.vinyl.Field.ComponentTypeR\rcompo\
-    nentType\x12/\n\x07matches\x18\x04\x20\x01(\x0b2\x15.vinyl.QueryComponen\
-    tR\x07matches\"p\n\rComponentType\x12\n\n\x06EQUALS\x10\0\x12\x10\n\x0cG\
-    REATER_THAN\x10\x01\x12\r\n\tLESS_THAN\x10\x02\x12\t\n\x05EMPTY\x10\x03\
-    \x12\r\n\tNOT_EMPTY\x10\x04\x12\x0b\n\x07IS_NULL\x10\x05\x12\x0b\n\x07MA\
-    TCHES\x10\x06\"\xfd\x02\n\x05Value\x12\x16\n\x06double\x18\x01\x20\x01(\
-    \x01R\x06double\x12\x14\n\x05float\x18\x02\x20\x01(\x02R\x05float\x12\
-    \x14\n\x05int32\x18\x03\x20\x01(\x05R\x05int32\x12\x14\n\x05int64\x18\
-    \x04\x20\x01(\x03R\x05int64\x12\x16\n\x06sint32\x18\x06\x20\x01(\x11R\
-    \x06sint32\x12\x16\n\x06sint64\x18\x07\x20\x01(\x12R\x06sint64\x12\x12\n\
-    \x04bool\x18\n\x20\x01(\x08R\x04bool\x12\x16\n\x06string\x18\x0b\x20\x01\
-    (\tR\x06string\x12\x14\n\x05bytes\x18\x0c\x20\x01(\x0cR\x05bytes\x125\n\
-    \nvalue_type\x18\x14\x20\x01(\x0e2\x16.vinyl.Value.ValueTypeR\tvalueType\
-    \"q\n\tValueType\x12\n\n\x06DOUBLE\x10\0\x12\t\n\x05FLOAT\x10\x01\x12\t\
-    \n\x05INT32\x10\x02\x12\t\n\x05INT64\x10\x03\x12\n\n\x06SINT32\x10\x05\
-    \x12\n\n\x06SINT64\x10\x06\x12\x08\n\x04BOOL\x10\t\x12\n\n\x06STRING\x10\
-    \n\x12\t\n\x05BYTES\x10\x0b\"4\n\x06Insert\x12\x16\n\x06record\x18\x01\
-    \x20\x01(\tR\x06record\x12\x12\n\x04data\x18\x02\x20\x01(\x0cR\x04data2i\
-    \n\x05Vinyl\x124\n\x05Login\x12\x13.vinyl.LoginRequest\x1a\x14.vinyl.Log\
-    inResponse\"\0\x12*\n\x05Query\x12\x0e.vinyl.Request\x1a\x0f.vinyl.Respo\
-    nse\"\0B\x12\n\x05vinylZ\ttransportb\x06proto3\
+    OptionR\x05index\x12E\n\rdefault_value\x18\x14\x20\x01(\x0e2\x20.vinyl.F\
+    ieldOptions.DefaultValueR\x0cdefaultValue\x1a9\n\x0bIndexOption\x12\x12\
+    \n\x04type\x18\x01\x20\x01(\tR\x04type\x12\x16\n\x06unique\x18\x02\x20\
+    \x01(\x08R\x06unique\">\n\x0cDefaultValue\x12\x08\n\x04NULL\x10\0\x12\
+    \x07\n\x03NOW\x10\x01\x12\x11\n\rNOW_ON_UPDATE\x10\x02\x12\x08\n\x04UUID\
+    \x10\x03\";\n\rLoginResponse\x12\x14\n\x05token\x18\x01\x20\x01(\tR\x05t\
+    oken\x12\x14\n\x05error\x18\x02\x20\x01(\tR\x05error\"\xe3\x02\n\x05Quer\
+    y\x125\n\x0crecord_query\x18\x01\x20\x01(\x0b2\x12.vinyl.RecordQueryR\
+    \x0brecordQuery\x12G\n\x12execute_properties\x18\x04\x20\x01(\x0b2\x18.v\
+    inyl.ExecutePropertiesR\x11executeProperties\x12-\n\x0bprimary_key\x18\
+    \x05\x20\x01(\x0b2\x0c.vinyl.ValueR\nprimaryKey\x125\n\nquery_type\x18\
+    \x03\x20\x01(\x0e2\x16.vinyl.Query.QueryTypeR\tqueryType\x12\x1f\n\x0bre\
+    cord_type\x18\x06\x20\x01(\tR\nrecordType\"S\n\tQueryType\x12\x10\n\x0cR\
+    ECORD_QUERY\x10\0\x12\x10\n\x0cDELETE_WHERE\x10\x01\x12\x11\n\rDELETE_RE\
+    CORD\x10\x02\x12\x0f\n\x0bLOAD_RECORD\x10\x03\"<\n\x0bRecordQuery\x12-\n\
+    \x06filter\x18\x01\x20\x01(\x0b2\x15.vinyl.QueryComponentR\x06filter\"=\
+    \n\x11ExecuteProperties\x12\x14\n\x05limit\x18\x01\x20\x01(\x05R\x05limi\
+    t\x12\x12\n\x04skip\x18\x02\x20\x01(\x05R\x04skip\"\x96\x02\n\x0eQueryCo\
+    mponent\x12+\n\x05child\x18\x01\x20\x01(\x0b2\x15.vinyl.QueryComponentR\
+    \x05child\x121\n\x08children\x18\x02\x20\x03(\x0b2\x15.vinyl.QueryCompon\
+    entR\x08children\x12J\n\x0ecomponent_type\x18\x03\x20\x01(\x0e2#.vinyl.Q\
+    ueryComponent.ComponentTypeR\rcomponentType\x12\"\n\x05field\x18\x04\x20\
+    \x01(\x0b2\x0c.vinyl.FieldR\x05field\"4\n\rComponentType\x12\x07\n\x03AN\
+    D\x10\0\x12\x06\n\x02OR\x10\x01\x12\x07\n\x03NOT\x10\x02\x12\t\n\x05FIEL\
+    D\x10\x03\"\xa5\x02\n\x05Field\x12\x12\n\x04name\x18\x01\x20\x01(\tR\x04\
+    name\x12\"\n\x05value\x18\x02\x20\x01(\x0b2\x0c.vinyl.ValueR\x05value\
+    \x12A\n\x0ecomponent_type\x18\x03\x20\x01(\x0e2\x1a.vinyl.Field.Componen\
+    tTypeR\rcomponentType\x12/\n\x07matches\x18\x04\x20\x01(\x0b2\x15.vinyl.\
+    QueryComponentR\x07matches\"p\n\rComponentType\x12\n\n\x06EQUALS\x10\0\
+    \x12\x10\n\x0cGREATER_THAN\x10\x01\x12\r\n\tLESS_THAN\x10\x02\x12\t\n\
+    \x05EMPTY\x10\x03\x12\r\n\tNOT_EMPTY\x10\x04\x12\x0b\n\x07IS_NULL\x10\
+    \x05\x12\x0b\n\x07MATCHES\x10\x06\"\xfd\x02\n\x05Value\x12\x16\n\x06doub\
+    le\x18\x01\x20\x01(\x01R\x06double\x12\x14\n\x05float\x18\x02\x20\x01(\
+    \x02R\x05float\x12\x14\n\x05int32\x18\x03\x20\x01(\x05R\x05int32\x12\x14\
+    \n\x05int64\x18\x04\x20\x01(\x03R\x05int64\x12\x16\n\x06sint32\x18\x06\
+    \x20\x01(\x11R\x06sint32\x12\x16\n\x06sint64\x18\x07\x20\x01(\x12R\x06si\
+    nt64\x12\x12\n\x04bool\x18\n\x20\x01(\x08R\x04bool\x12\x16\n\x06string\
+    \x18\x0b\x20\x01(\tR\x06string\x12\x14\n\x05bytes\x18\x0c\x20\x01(\x0cR\
+    \x05bytes\x125\n\nvalue_type\x18\x14\x20\x01(\x0e2\x16.vinyl.Value.Value\
+    TypeR\tvalueType\"q\n\tValueType\x12\n\n\x06DOUBLE\x10\0\x12\t\n\x05FLOA\
+    T\x10\x01\x12\t\n\x05INT32\x10\x02\x12\t\n\x05INT64\x10\x03\x12\n\n\x06S\
+    INT32\x10\x05\x12\n\n\x06SINT64\x10\x06\x12\x08\n\x04BOOL\x10\t\x12\n\n\
+    \x06STRING\x10\n\x12\t\n\x05BYTES\x10\x0b\"4\n\x06Insert\x12\x16\n\x06re\
+    cord\x18\x01\x20\x01(\tR\x06record\x12\x12\n\x04data\x18\x02\x20\x01(\
+    \x0cR\x04data2i\n\x05Vinyl\x124\n\x05Login\x12\x13.vinyl.LoginRequest\
+    \x1a\x14.vinyl.LoginResponse\"\0\x12*\n\x05Query\x12\x0e.vinyl.Request\
+    \x1a\x0f.vinyl.Response\"\0B\x12\n\x05vinylZ\ttransportb\x06proto3\
 ";
 
 static mut file_descriptor_proto_lazy: ::protobuf::lazy::Lazy<::protobuf::descriptor::FileDescriptorProto> = ::protobuf::lazy::Lazy {
