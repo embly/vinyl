@@ -1,6 +1,6 @@
 [package]
 name = "vinyl"
-version = "0.0.3"
+version = "0.0.4"
 description = "A convenience layer for the FoundationDB Record Layer"
 readme = "./readme.md"
 homepage = "https://github.com/embly/vinyl"
@@ -18,7 +18,7 @@ futures-cpupool = "~0.1"
 url = "2.1.0"
 failure = {version = "~0.1", features = ["std"], default-features = false}
 protoc-rust-grpc = {version = "0.6.1", optional = true}
-vinyl-core = "0.0.1"
+vinyl-core = "0.0.2"
 # vinyl-core = {path = "../vinyl-rs-core"}
 
 [features]

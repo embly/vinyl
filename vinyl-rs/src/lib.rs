@@ -54,10 +54,10 @@ pub struct DB {
 
 impl DB {
     /// insert a record
-    pub fn insert<T: protobuf::Message>(&self, msg: T) -> Result<T, Error> {
-        let (msg, req) = vinyl_core::insert_request(msg)?;
+    pub fn insert<T: protobuf::Message>(&self, msg: T) -> Result<(), Error> {
+        let req = vinyl_core::insert_request(msg)?;
         self.send_request(req)?;
-        Ok(msg)
+        Ok(())
     }
 
     /// return records that match the provided query

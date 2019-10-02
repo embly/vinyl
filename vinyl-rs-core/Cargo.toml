@@ -1,6 +1,6 @@
 [package]
 name = "vinyl-core"
-version = "0.0.1"
+version = "0.0.2"
 description = "A convenience layer for the FoundationDB Record Layer"
 license = "MIT"
 readme = "./readme.md"

@@ -100,12 +100,12 @@ impl Waitable for ProtoResponseWaitable {
 }
 
 /// a future that returns records
-pub struct RecordsFuture<T> {
+pub struct RecordsWaitable<T> {
     response: ProtoResponseWaitable,
     phantom: PhantomData<T>,
 }
 
-impl<T: Message> Waitable for RecordsFuture<T> {
+impl<T: Message> Waitable for RecordsWaitable<T> {
     type Output = Result<Vec<T>, Error>;
 
     fn id(&self) -> i32 {
@@ -199,10 +199,10 @@ impl DB {
     }
 
     /// return records that match the provided query
-    pub fn execute_query<T: Message>(&self, q: query::Query) -> Result<RecordsFuture<T>, Error> {
+    pub fn execute_query<T: Message>(&self, q: query::Query) -> Result<RecordsWaitable<T>, Error> {
         let req = vinyl_core::execute_query_request::<T>(q);
         let response = self.send_request(req)?;
-        Ok(RecordsFuture {
+        Ok(RecordsWaitable {
             response,
             phantom: PhantomData,
         })
@@ -237,13 +237,5 @@ impl DB {
         req.set_token(self.session_token.clone());
         conn.write_all(&req.write_to_bytes()?)?;
         Ok(ProtoResponseWaitable { conn: conn })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }
