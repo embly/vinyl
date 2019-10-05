@@ -65,8 +65,8 @@
 pub use vinyl_core::query;
 pub use vinyl_core::DefaultValue;
 pub use vinyl_core::ToValue;
-
-use embly::{spawn_function, Conn, Waitable};
+pub use embly::Waitable;
+use embly::{spawn_function, Conn};
 use failure::{err_msg, Error};
 use protobuf::{parse_from_bytes, Message};
 use std::io::Read;
