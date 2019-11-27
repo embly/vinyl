@@ -11,8 +11,8 @@ edition = "2018"
 [dependencies]
 protobuf = "~2"
 url = "2.1.0"
-# embly = { path = "../../../../../../embly/embly-rs" }
-embly = "0.0.4"
+embly = { path = "../../../../../../embly/embly-rs" }
+# embly = "0.0.4"
 failure = {version = "~0.1", features = ["std"], default-features = false}
 vinyl-core = "0.0.2"
 # vinyl-core = { path = "../vinyl-rs-core" }
