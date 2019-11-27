@@ -69,9 +69,7 @@ use protobuf::{parse_from_bytes, Message};
 use std::future::Future;
 use std::io::Read;
 use std::io::Write;
-use std::pin::Pin;
 use std::str;
-use std::task::{Context, Poll};
 use vinyl_core::proto::transport::{Request, Response as ProtoResponse};
 pub use vinyl_core::query;
 pub use vinyl_core::DefaultValue;
@@ -114,28 +112,47 @@ pub struct DB {
 
 impl DB {
     /// make a new one
-    pub async fn new(name: &str) -> Result<Self, Error> {
-        let mut conn = spawn_function(&format!("embly/vinyl/{}/connect", name))?;
-        conn.await?;
-        let mut buf = Vec::new();
-        conn.read_to_end(&mut buf)?;
-        Ok(Self {
-            name: name.to_string(),
-            session_token: String::from(str::from_utf8(&buf)?),
-        })
+    pub fn new(name: &str) -> impl Future<Output = Result<Self, Error>> {
+        let result = spawn_function(&format!("embly/vinyl/{}/connect", name));
+        let name_string = name.to_string();
+        async move {
+            match result {
+                Ok(mut conn) => {
+                    conn.await?;
+                    let mut buf = Vec::new();
+                    conn.read_to_end(&mut buf)?;
+                    Ok(Self {
+                        name: name_string,
+                        session_token: String::from(str::from_utf8(&buf)?),
+                    })
+                }
+                Err(err) => Err(err),
+            }
+        }
     }
 
     /// return records that match the provided query
-    pub async fn execute_query<T: Message>(&self, q: query::Query) -> Result<Vec<T>, Error> {
+    pub fn execute_query<T: Message>(
+        &self,
+        q: query::Query,
+    ) -> impl Future<Output = Result<Vec<T>, Error>> {
         let req = vinyl_core::execute_query_request::<T>(q);
-        let conn = self.send_request(req)?;
-        let response = self.await_response(conn).await?;
-        let mut v: Vec<T> = Vec::new();
-        for record in response.get_records().iter() {
-            v.push(parse_from_bytes(record)?);
+        let result = self.send_request(req);
+        async {
+            match result {
+                Ok(conn) => {
+                    let response = await_response(conn).await?;
+                    let mut v: Vec<T> = Vec::new();
+                    for record in response.get_records().iter() {
+                        v.push(parse_from_bytes(record)?);
+                    }
+                    Ok(v)
+                }
+                Err(err) => Err(err),
+            }
         }
-        Ok(v)
     }
+
     fn insert_sync<T: Message>(&self, msg: T) -> Result<Conn, Error> {
         let req = vinyl_core::insert_request::<T>(msg)?;
         let conn = self.send_request(req)?;
@@ -147,64 +164,52 @@ impl DB {
         async {
             match result {
                 Ok(conn) => {
-                    let _response = await_response(conn.clone()).await?;
+                    let _response = await_response(conn).await?;
                     Ok(())
                 }
-                Err(err) => {
-                    return Err(err);
-                }
+                Err(err) => Err(err),
             }
         }
     }
-    /// asdf
-    pub fn insert_again<T: Message>(&self, msg: T) -> impl Future<Output = Result<(), Error>> {
-        let req = vinyl_core::insert_request::<T>(msg).unwrap();
-        let conn = self.send_request(req).unwrap();
-        async move {
-            let _response = await_response(conn).await?;
-            Ok(())
-        }
-        // TODO: return any errors
-    }
-    // pub fn insert_again<T: Message>(
-    //     &self,
-    //     msg: T,
-    // ) -> Result<impl Future<Output = Result<(), Error>>, Error> {
-    //     let req = vinyl_core::insert_request::<T>(msg)?;
-    //     let conn = self.send_request(req)?;
-    //     Ok(async move {
-    //         let _response = self.await_response(conn).await?;
-    //         Ok(())
-    //     })
-    //     // TODO: return any errors
-    // }
-    /// asdf
-    // pub async fn insert<T: Message>(&self, msg: T) -> Result<(), Error> {
-    //     let req = vinyl_core::insert_request::<T>(msg)?;
-    //     let conn = self.send_request(req)?;
-    //     let _response = self.await_response(conn).await?;
-    //     Ok(())
-    //     // TODO: return any errors
-    // }
 
     /// asdf
-    pub async fn load_record<T: Message, K: ToValue>(&self, pk: K) -> Result<T, Error> {
+    pub fn load_record<T: Message, K: ToValue>(
+        &self,
+        pk: K,
+    ) -> impl Future<Output = Result<T, Error>> {
         let req = vinyl_core::load_record::<T, K>(pk);
-        let conn = self.send_request(req)?;
-        let resp = self.await_response(conn).await?;
-        let record = match resp.get_records().first() {
-            Some(record) => record,
-            None => return Err(err_msg("no record found")),
-        };
-        Ok(parse_from_bytes(record)?)
+        let result = self.send_request(req);
+        async {
+            match result {
+                Ok(conn) => {
+                    let resp = await_response(conn).await?;
+                    let record = match resp.get_records().first() {
+                        Some(record) => record,
+                        None => return Err(err_msg("no record found")),
+                    };
+                    Ok(parse_from_bytes(record)?)
+                }
+                Err(err) => Err(err),
+            }
+        }
     }
 
     /// delete records that match the provided query
-    pub async fn delete_record<T: Message, K: ToValue>(&self, pk: K) -> Result<(), Error> {
+    pub fn delete_record<T: Message, K: ToValue>(
+        &self,
+        pk: K,
+    ) -> impl Future<Output = Result<(), Error>> {
         let req = vinyl_core::delete_record::<T, K>(pk);
-        let conn = self.send_request(req)?;
-        self.await_response(conn).await?;
-        Ok(())
+        let result = self.send_request(req);
+        async {
+            match result {
+                Ok(conn) => {
+                    let _response = await_response(conn).await?;
+                    Ok(())
+                }
+                Err(err) => Err(err),
+            }
+        }
     }
 
     fn send_request(&self, mut req: Request) -> Result<Conn, Error> {
@@ -212,18 +217,6 @@ impl DB {
         req.set_token(self.session_token.clone());
         conn.write_all(&req.write_to_bytes()?)?;
         Ok(conn)
-    }
-    async fn await_response(&self, mut conn: Conn) -> Result<ProtoResponse, Error> {
-        conn.await?;
-        let mut buffer = Vec::new();
-        conn.read_to_end(&mut buffer)?;
-        let mut response: ProtoResponse = parse_from_bytes(&buffer)?;
-        let err = response.take_error();
-        if !err.is_empty() {
-            Err(err_msg(err))
-        } else {
-            Ok(response)
-        }
     }
 }
 
