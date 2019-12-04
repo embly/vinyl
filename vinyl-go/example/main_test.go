@@ -2,7 +2,10 @@ package main
 
 import (
 	fmt "fmt"
+	"log"
+	"sync"
 	"testing"
+	"time"
 
 	vinyl "github.com/embly/vinyl/vinyl-go"
 	"github.com/embly/vinyl/vinyl-go/qm"
@@ -10,7 +13,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func runAndMeasureMany(db *vinyl.DB) {
+	var wg sync.WaitGroup
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			for i := 0; i < 20; i++ {
+				pkUser := User{}
+				st := time.Now()
+				if err := db.LoadRecord(&pkUser, "whoever"); err != nil {
+					log.Fatal(err)
+				}
+				fmt.Println(time.Now().Sub(st))
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+}
+
 func TestBasic(t *testing.T) {
+	fmt.Println(proto.FileDescriptor("tables.proto"))
 	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", vinyl.Metadata{
 		Descriptor: proto.FileDescriptor("tables.proto"),
 		Records: []vinyl.Record{{
@@ -31,10 +55,14 @@ func TestBasic(t *testing.T) {
 		Email: "max@max.com",
 	}
 	fmt.Println("inserting")
+
+	t1 := time.Now()
 	if err := db.Insert(&user); err != nil {
 		t.Error(err)
 	}
-	fmt.Println("over")
+	fmt.Println("over", time.Now().Sub(t1))
+
+	runAndMeasureMany(db)
 
 	user2 := User{
 		Id:    "whoever",

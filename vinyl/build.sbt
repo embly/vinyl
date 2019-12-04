@@ -79,7 +79,7 @@ libraryDependencies ++= Seq("org.slf4j" % "slf4j-api" % "1.7.5", "org.slf4j" % "
                             
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.5" % Test
 
-libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.7.74.0"
+libraryDependencies += "org.foundationdb" % "fdb-record-layer-core-pb3" % "2.8.91.0"
 libraryDependencies += "org.scala-lang.modules" % "scala-java8-compat_2.12" % "0.9.0"
 
 libraryDependencies += "io.grpc" % "grpc-netty" % scalapb.compiler.Version.grpcJavaVersion

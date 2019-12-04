@@ -3,13 +3,16 @@ package main
 import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpace
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpaceDirectory
-import com.apple.foundationdb;
+import com.apple.foundationdb.record.provider.foundationdb.storestate.MetaDataVersionStampStoreStateCacheFactory
+import com.apple.foundationdb
+import com.apple.foundationdb.record.provider.foundationdb.FDBStoreTimer;
 import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataProto, RecordMetaDataBuilder}
 import com.apple.foundationdb.record.query.RecordQuery
 import com.apple.foundationdb.record.query.expressions.{Query, QueryComponent}
 import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.provider.foundationdb.FDBRecordStore
 import com.google.protobuf.ByteString
+import com.apple.foundationdb.record.provider.foundationdb.FDBStoreTimer
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
 import com.google.protobuf.DynamicMessage
@@ -44,7 +47,7 @@ class Session(ks: String, descriptorBytes: ByteString) {
 
   var messageDescriptorMap: HashMap[String, Descriptor] = HashMap()
   for (messageType <- fileDescriptor.getMessageTypes().asScala) {
-    println(s"registering descriptor for type: ${messageType.getName}")
+    // println(s"registering descriptor for type: ${messageType.getName}")
     messageDescriptorMap += (messageType.getName -> messageType)
   }
 
@@ -56,7 +59,7 @@ object VinylServer {
 
 
   def main(args: Array[String]): Unit = {
-    val db = FDBDatabaseFactory.instance().getDatabase().performNoOp() 
+    // FDBDatabaseFactory.instance().getDatabase().performNoOp() 
     // println(s"got that $db")
     val server = new VinylServer(ExecutionContext.global)
     server.start()
@@ -82,7 +85,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
         "*** shutting down gRPC server since JVM is shutting down"
       )
       self.stop()
-      System.err.println("*** server shut down")
+      // System.err.println("*** server shut down")
     }
   }
 
@@ -169,7 +172,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
           if (executeProperties.limit != 0) {
             epBuilder.setReturnedRowLimit(executeProperties.limit)
           }
-          println(s"LIMIT IS ${executeProperties.limit}")
+          // println(s"LIMIT IS ${executeProperties.limit}")
           Some(epBuilder.build())
         }
       case None => None
@@ -188,13 +191,13 @@ class VinylServer(executionContext: ExecutionContext) { self =>
     var msg = cursor.onNext().get
 
     while (msg.hasNext) {
-      println(s"PRIMARY KEY TIME ${msg.get.getStoredRecord.getPrimaryKey}")
+      // println(s"PRIMARY KEY TIME ${msg.get.getStoredRecord.getPrimaryKey}")
       response = response.addRecords(
         ByteString.copyFrom(msg.get.getStoredRecord.getRecord.toByteArray)
       )
-      println(
-        s"got cursor message $msg ${msg.get.getStoredRecord.getRecord} $response"
-      )
+      // println(
+      //   s"got cursor message $msg ${msg.get.getStoredRecord.getRecord} $response"
+      // )
       msg = cursor.onNext().get
     }
     response
@@ -211,7 +214,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
     )
 
     val msg = store.loadRecord(tuple)
-    println(s"load record request $msg ${tuple}")
+    // println(s"load record request $msg ${tuple}")
     if (msg != null) {
       response =
         response.addRecords(ByteString.copyFrom(msg.getRecord.toByteArray))
@@ -279,9 +282,10 @@ class VinylServer(executionContext: ExecutionContext) { self =>
   implicit val ec = ExecutionContext.global
 
   val activeSessions: HashMap[String, Session] = HashMap()
-  val db = FDBDatabaseFactory
-    .instance()
-    .getDatabase()
+  val factory = FDBDatabaseFactory.instance()
+  factory.setTrace("./", "vinyl")
+  val db = factory.getDatabase()
+  db.setStoreStateCache(MetaDataVersionStampStoreStateCacheFactory.newInstance().getCache(db))
 
   private def stop(): Unit = {
     if (server != null) {
@@ -297,7 +301,8 @@ class VinylServer(executionContext: ExecutionContext) { self =>
 
   private class VinylImpl extends VinylGrpc.Vinyl {
     override def login(req: LoginRequest) = {
-      println(s"got login request $LoginRequest $activeSessions")
+      // println(s"got login request $LoginRequest $activeSessions")
+
       val descriptorBytes: ByteString = req.fileDescriptor
       val session = new Session(
         req.keyspace,
@@ -316,7 +321,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
             fieldOption.index
 
           if (fieldOption.primaryKey) {
-            println(s"Adding primary key '$name' to '${record.name}'")
+            // println(s"Adding primary key '$name' to '${record.name}'")
             recordType.setPrimaryKey(
               Key.Expressions.concat(
                 Key.Expressions.recordType(),
@@ -324,11 +329,11 @@ class VinylServer(executionContext: ExecutionContext) { self =>
               )
             )
           } else if (idx.isDefined && idx.get.`type` == "value") {
-            println(s"Adding index to '${record.name}' for field '$name'")
+            // println(s"Adding index to '${record.name}' for field '$name'")
             val index_name = record.name + "." + name
             val unique: Boolean = idx.get.unique
             val options: java.util.List[RecordMetaDataProto.Index.Option] = Nil.asJava
-            println(s"${new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique)).isUnique}")
+            // println(s"${new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique)).isUnique}")
             session.metadata.addIndex(
               record.name: String,
               new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique))
@@ -340,9 +345,9 @@ class VinylServer(executionContext: ExecutionContext) { self =>
       }
 
       val token = randomString(32)
-      println(
-        s"Starting new session with token: ${token} ${req.keyspace}"
-      )
+      // println(
+      //   s"Starting new session with token: ${token} ${req.keyspace}"
+      // )
 
       // TODO: auth values and session
       activeSessions += (token -> session)
@@ -352,13 +357,15 @@ class VinylServer(executionContext: ExecutionContext) { self =>
     override def query(
         req: Request
     ) = {
+      val t0 = System.nanoTime()
+
       if (!activeSessions.contains(req.token)) {
         Future.successful(Response(error = "auth token is invalid"))
       } else {
         val session = activeSessions(req.token)
 
-        println(s"Got authed request")
-
+        // println(s"Got authed request")
+        // println("begin: " + (System.nanoTime() - t0)/1000 + "ms")
         val context = db.openContext()
         val keySpace = new KeySpace(
           new KeySpaceDirectory(
@@ -367,20 +374,20 @@ class VinylServer(executionContext: ExecutionContext) { self =>
             session.keySpace
           )
         )
-
+        // println("db open: " + (System.nanoTime() - t0)/1000 + "ms")
         val keyspacePath = keySpace.path(session.keySpace)
-
+        // println("1: " + (System.nanoTime() - t0)/1000 + "ms")
         for (insertion <- (req.insertions: Seq[vinyl.transport.Insert])) {
           val data: ByteString = insertion.data
 
-          println(
-            s"found insertion ${insertion.record} ${data.toByteArray.mkString(" ")}"
-          )
+          // println(
+          //   s"found insertion ${insertion.record} ${data.toByteArray.mkString(" ")}"
+          // )
 
           val descriptor = session.messageDescriptorMap(insertion.record);
           val builder = DynamicMessage.newBuilder(descriptor);
           builder.mergeFrom(insertion.data: ByteString).build()
-          println(descriptor.getFields)
+          // println(descriptor.getFields)
           val resp = FDBRecordStore
             .newBuilder()
             .setMetaDataProvider(session.metadata)
@@ -391,37 +398,56 @@ class VinylServer(executionContext: ExecutionContext) { self =>
               builder.mergeFrom(insertion.data: ByteString).build()
             )
           //
-          println(s"insertion request response${resp}")
-
+          // println(s"insertion request response${resp}")
+          // println("Insertion complete: " + (System.nanoTime() - t0)/1000 + "ms")
         }
-
+        // println("2: " + (System.nanoTime() - t0)/1000 + "ms")
         var response = Response()
+        // println("3: " + (System.nanoTime() - t0)/1000 + "ms")
 
         val query: Option[vinyl.transport.Query] = req.query
-
+        // println("4: " + (System.nanoTime() - t0)/1000 + "ms")
         if (query.isDefined) {
-          println("processing query")
+          // println("processing query")
+          // println("Begin processed query: " + (System.nanoTime() - t0)/1000 + "ms")
           val query: vinyl.transport.Query = req.getQuery
+
+          val timer = new FDBStoreTimer()
+          context.setTimer(timer)
+          // this takes 7ms
+          val t1 = System.nanoTime()
           val store = FDBRecordStore
             .newBuilder()
             .setMetaDataProvider(session.metadata)
             .setContext(context)
             .setKeySpacePath(keyspacePath)
             .createOrOpen()
+          store.setStateCacheabilityAsync(true)
+          val cache_hit = context.getTimer().getCount(FDBStoreTimer.Counts.STORE_STATE_CACHE_HIT)
+          println("Processed query: " + (System.nanoTime() - t0)/1000 + "ms cache_hit "+cache_hit)
+          
           response = processQuery(store, session, query)
+          // println("Processed query: " + (System.nanoTime() - t0)/1000 + "ms")
         }
+
         try {
           context.commit()
         } catch {
           case uniqueness: foundationdb.record.RecordIndexUniquenessViolation => {
             response = Response(error = uniqueness.getMessage)
           }
-          case default => println("Error commiting to db" + default)
+          // case default => println("Error commiting to db" + default)
         }
+        // println("Commit: " + (System.nanoTime() - t0)/1000 + "ms")
         context.close()
-        println(s"got query request $req $response")
+        // println(s"got query request $req $response")
+        // println("Context close: " + (System.nanoTime() - t0)/1000 + "ms")
+
+
         Future.successful(response)
+        
       }
+
     }
   }
 }
