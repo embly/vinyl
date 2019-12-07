@@ -33,9 +33,55 @@ func runAndMeasureMany(db *vinyl.DB) {
 
 }
 
+func TestInit(t *testing.T) {
+	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/12", vinyl.Metadata{
+		Descriptor: proto.FileDescriptor("tables.proto"),
+		Records: []vinyl.Record{{
+			Name:       "User",
+			PrimaryKey: "id",
+			Indexes: []vinyl.Index{{
+				Field:  "email",
+				Unique: true,
+			}},
+		}},
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	db.Close()
+}
+
+func TestInsert(t *testing.T) {
+
+	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/134", vinyl.Metadata{
+		Descriptor: proto.FileDescriptor("tables.proto"),
+		Records: []vinyl.Record{{
+			Name:       "User",
+			PrimaryKey: "id",
+			Indexes: []vinyl.Index{{
+				Field:  "email",
+				Unique: true,
+			}},
+		}},
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	defer db.Close()
+	user := User{
+		Id:    "whatever",
+		Email: "max@max.com",
+	}
+
+	if err := db.Insert(&user); err != nil {
+		t.Error(err)
+	}
+
+}
+
 func TestBasic(t *testing.T) {
-	fmt.Println(proto.FileDescriptor("tables.proto"))
-	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/foo", vinyl.Metadata{
+
+	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/12", vinyl.Metadata{
 		Descriptor: proto.FileDescriptor("tables.proto"),
 		Records: []vinyl.Record{{
 			Name:       "User",

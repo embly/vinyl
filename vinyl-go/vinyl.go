@@ -3,6 +3,7 @@ package vinyl
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -119,10 +120,12 @@ func Connect(connectionString string, metadata Metadata) (db *DB, err error) {
 		return
 	}
 	loginRequest.FileDescriptor = b
+	fmt.Println("login request", loginRequest)
 	resp, err := client.Login(context.Background(), &loginRequest)
 	if err != nil {
 		return
 	}
+	fmt.Println("login response", resp)
 	if resp.Error != "" {
 		err = errors.New(resp.Error)
 		return
@@ -331,10 +334,12 @@ func RequestDescription(request *transport.Request) string {
 // SendRequest allows direct sending of a request proto struct
 func (db *DB) SendRequest(request transport.Request) (respProto *transport.Response, err error) {
 	request.Token = db.Token
+	fmt.Println("sending request", request)
 	respProto, err = db.client.Query(context.Background(), &request)
 	if err != nil {
 		return
 	}
+	fmt.Println("go response", respProto)
 	if respProto.Error != "" {
 		err = errors.New(respProto.Error)
 	}

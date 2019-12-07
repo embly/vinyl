@@ -16,6 +16,7 @@ name := "scl"
 organization := "run.embly.vinyl"
 version := "1.0"
 
+traceLevel in test := 0
 // mainClass in (Compile,run) := Some("run.embly.vinyl.main.Main.VinylServer")
 
 // Note, it's not required for you to define these three settings. These are

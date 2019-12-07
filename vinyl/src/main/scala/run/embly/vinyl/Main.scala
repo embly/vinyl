@@ -1,21 +1,23 @@
-package main
+package run.embly.vinyl
 
 import com.apple.foundationdb.record.provider.foundationdb.FDBDatabaseFactory
-import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpace
-import com.apple.foundationdb.record.provider.foundationdb.keyspace.KeySpaceDirectory
+import com.apple.foundationdb.record.provider.foundationdb.keyspace.{KeySpace, KeySpaceDirectory, KeySpacePath}
 import com.apple.foundationdb.record.provider.foundationdb.storestate.MetaDataVersionStampStoreStateCacheFactory
 import com.apple.foundationdb
-import com.apple.foundationdb.record.provider.foundationdb.FDBStoreTimer;
-import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataProto, RecordMetaDataBuilder}
+import com.apple.foundationdb.record.provider.foundationdb.FDBStoreTimer
+import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder, RecordMetaDataProto}
 import com.apple.foundationdb.record.query.RecordQuery
 import com.apple.foundationdb.record.query.expressions.{Query, QueryComponent}
 import com.apple.foundationdb.record.metadata.{Index, Key}
-import com.apple.foundationdb.record.provider.foundationdb.FDBRecordStore
+import com.apple.foundationdb.util.LoggableException
+import com.apple.foundationdb.record.provider.foundationdb.{FDBMetaDataStore, FDBRecordStore}
+import com.apple.foundationdb.record.RecordMetaDataOptionsProto
 import com.google.protobuf.ByteString
 import com.apple.foundationdb.record.provider.foundationdb.FDBStoreTimer
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
 import com.google.protobuf.DynamicMessage
+import com.google.protobuf.Descriptors
 import io.grpc.{Server, ServerBuilder}
 import io.grpc.stub.StreamObserver
 
@@ -23,43 +25,19 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.concurrent.{ExecutionContext, Future}
 import vinyl.transport
-import vinyl.transport.{
-  ExecuteProperties,
-  LoginRequest,
-  LoginResponse,
-  Request,
-  Response,
-  VinylGrpc
-}
+import vinyl.transport.{ExecuteProperties, LoginRequest, LoginResponse, Request, Response, VinylGrpc}
 import java.util.logging.Logger
 
-class Session(ks: String, descriptorBytes: ByteString) {
+import run.embly.vinyl.Client
 
-  private val descriptor: FileDescriptorProto =
-    FileDescriptorProto.parseFrom(descriptorBytes.toByteArray)
-
-  private val fileDescriptor = FileDescriptor.buildFrom(descriptor, Array());
-  var metadata: RecordMetaDataBuilder = RecordMetaData
-    .newBuilder()
-    .setRecords(fileDescriptor)
-
-  var keySpace: String = ks
-
-  var messageDescriptorMap: HashMap[String, Descriptor] = HashMap()
-  for (messageType <- fileDescriptor.getMessageTypes().asScala) {
-    // println(s"registering descriptor for type: ${messageType.getName}")
-    messageDescriptorMap += (messageType.getName -> messageType)
-  }
-
-}
+import scala.util.{Failure, Success, Try}
 
 object VinylServer {
 
   private val logger = Logger.getLogger(classOf[VinylServer].getName)
 
-
   def main(args: Array[String]): Unit = {
-    // FDBDatabaseFactory.instance().getDatabase().performNoOp() 
+    // FDBDatabaseFactory.instance().getDatabase().performNoOp()
     // println(s"got that $db")
     val server = new VinylServer(ExecutionContext.global)
     server.start()
@@ -207,7 +185,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
       session: Session,
       query: transport.Query
   ): Response = {
-    val recordType = session.metadata.build().getRecordType(query.recordType)
+    val recordType = session.metaData.build().getRecordType(query.recordType)
     var response = Response()
     val tuple = recordType.getRecordTypeKeyTuple.addObject(
       wrapValue(query.primaryKey.get).asInstanceOf[AnyRef]
@@ -226,7 +204,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
       session: Session,
       query: transport.Query
   ): Response = {
-    val recordType = session.metadata.build().getRecordType(query.recordType)
+    val recordType = session.metaData.build().getRecordType(query.recordType)
     var response = Response()
     val tuple = recordType.getRecordTypeKeyTuple.addObject(
       wrapValue(query.primaryKey.get).asInstanceOf[AnyRef]
@@ -269,23 +247,7 @@ class VinylServer(executionContext: ExecutionContext) { self =>
     }
   }
 
-  def randomString(length: Int) = {
-    val chars = ('a' to 'z') ++ ('0' to '9')
-    val sb = new StringBuilder
-    for (i <- 1 to length) {
-      val randomNum = util.Random.nextInt(chars.length)
-      sb.append(chars(randomNum))
-    }
-    sb.toString
-  }
-
-  implicit val ec = ExecutionContext.global
-
-  val activeSessions: HashMap[String, Session] = HashMap()
-  val factory = FDBDatabaseFactory.instance()
-  factory.setTrace("./", "vinyl")
-  val db = factory.getDatabase()
-  db.setStoreStateCache(MetaDataVersionStampStoreStateCacheFactory.newInstance().getCache(db))
+  val client = new Client()
 
   private def stop(): Unit = {
     if (server != null) {
@@ -300,83 +262,34 @@ class VinylServer(executionContext: ExecutionContext) { self =>
   }
 
   private class VinylImpl extends VinylGrpc.Vinyl {
-    override def login(req: LoginRequest) = {
-      // println(s"got login request $LoginRequest $activeSessions")
-
-      val descriptorBytes: ByteString = req.fileDescriptor
-      val session = new Session(
-        req.keyspace,
-        descriptorBytes
-      )
-
-      val records: Seq[vinyl.transport.Record] = req.records
-      for (record <- records) {
-        val recordType = session.metadata.getRecordType(record.name)
-
-        val fieldOptions: Map[String, vinyl.transport.FieldOptions] =
-          record.fieldOptions
-
-        for ((name, fieldOption) <- fieldOptions) {
-          val idx: Option[vinyl.transport.FieldOptions.IndexOption] =
-            fieldOption.index
-
-          if (fieldOption.primaryKey) {
-            // println(s"Adding primary key '$name' to '${record.name}'")
-            recordType.setPrimaryKey(
-              Key.Expressions.concat(
-                Key.Expressions.recordType(),
-                Key.Expressions.field(name)
-              )
-            )
-          } else if (idx.isDefined && idx.get.`type` == "value") {
-            // println(s"Adding index to '${record.name}' for field '$name'")
-            val index_name = record.name + "." + name
-            val unique: Boolean = idx.get.unique
-            val options: java.util.List[RecordMetaDataProto.Index.Option] = Nil.asJava
-            // println(s"${new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique)).isUnique}")
-            session.metadata.addIndex(
-              record.name: String,
-              new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique))
-            )
-
-            // TODO: unique indexes
-          }
-        }
-      }
-
-      val token = randomString(32)
-      // println(
-      //   s"Starting new session with token: ${token} ${req.keyspace}"
-      // )
-
-      // TODO: auth values and session
-      activeSessions += (token -> session)
-      val reply = LoginResponse(token = token)
-      Future.successful(reply)
+    override def login(req: LoginRequest): Future[LoginResponse] = {
+      Future.successful(client.login(req.keyspace, req.fileDescriptor, req.records) match {
+        case Success(token) => LoginResponse(token=token)
+        case Failure(e) => LoginResponse(error=e.getMessage)
+      })
     }
     override def query(
         req: Request
     ) = {
       val t0 = System.nanoTime()
 
-      if (!activeSessions.contains(req.token)) {
+      if (!client.activeSessions.contains(req.token)) {
         Future.successful(Response(error = "auth token is invalid"))
       } else {
-        val session = activeSessions(req.token)
+        val session = client.activeSessions(req.token)
 
-        // println(s"Got authed request")
-        // println("begin: " + (System.nanoTime() - t0)/1000 + "ms")
-        val context = db.openContext()
-        val keySpace = new KeySpace(
-          new KeySpaceDirectory(
-            session.keySpace,
-            KeySpaceDirectory.KeyType.STRING,
-            session.keySpace
+        val context = client.db.openContext()
+        val mdStore = new FDBMetaDataStore(context, session.path)
+        mdStore.setMaintainHistory(false) // ??
+        mdStore.setDependencies(
+          Array[Descriptors.FileDescriptor](
+            RecordMetaDataOptionsProto.getDescriptor()
           )
         )
-        // println("db open: " + (System.nanoTime() - t0)/1000 + "ms")
-        val keyspacePath = keySpace.path(session.keySpace)
-        // println("1: " + (System.nanoTime() - t0)/1000 + "ms")
+
+        //        println(mdStore.getRecordMetaData().getRecordsDescriptor)
+        val keyspacePath = session.path
+
         for (insertion <- (req.insertions: Seq[vinyl.transport.Insert])) {
           val data: ByteString = insertion.data
 
@@ -385,12 +298,15 @@ class VinylServer(executionContext: ExecutionContext) { self =>
           // )
 
           val descriptor = session.messageDescriptorMap(insertion.record);
+          mdStore.setLocalFileDescriptor(descriptor.getFile)
           val builder = DynamicMessage.newBuilder(descriptor);
           builder.mergeFrom(insertion.data: ByteString).build()
           // println(descriptor.getFields)
+          println("version " + session.metaData.getVersion)
           val resp = FDBRecordStore
             .newBuilder()
-            .setMetaDataProvider(session.metadata)
+//            .setMetaDataStore(mdStore)
+            .setMetaDataProvider(session.metaData.getRecordMetaData())
             .setContext(context)
             .setKeySpacePath(keyspacePath)
             .createOrOpen()
@@ -418,14 +334,19 @@ class VinylServer(executionContext: ExecutionContext) { self =>
           val t1 = System.nanoTime()
           val store = FDBRecordStore
             .newBuilder()
-            .setMetaDataProvider(session.metadata)
+            .setMetaDataProvider(session.metaData)
             .setContext(context)
             .setKeySpacePath(keyspacePath)
             .createOrOpen()
-          store.setStateCacheabilityAsync(true)
-          val cache_hit = context.getTimer().getCount(FDBStoreTimer.Counts.STORE_STATE_CACHE_HIT)
-          println("Processed query: " + (System.nanoTime() - t0)/1000 + "ms cache_hit "+cache_hit)
-          
+          store.setStateCacheability(true)
+          val cache_hit = context
+            .getTimer()
+            .getCount(FDBStoreTimer.Counts.STORE_STATE_CACHE_HIT)
+          println(
+            "Processed query: " + (System
+              .nanoTime() - t0) / 1000 + "ms cache_hit " + cache_hit
+          )
+
           response = processQuery(store, session, query)
           // println("Processed query: " + (System.nanoTime() - t0)/1000 + "ms")
         }
@@ -443,9 +364,8 @@ class VinylServer(executionContext: ExecutionContext) { self =>
         // println(s"got query request $req $response")
         // println("Context close: " + (System.nanoTime() - t0)/1000 + "ms")
 
-
         Future.successful(response)
-        
+
       }
 
     }
