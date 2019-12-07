@@ -4,16 +4,48 @@ import com.apple.foundationdb.Range
 import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder}
 import com.apple.foundationdb.record.logging.KeyValueLogMessage
 import com.apple.foundationdb.record.metadata.{Key, MetaDataException}
-import com.apple.foundationdb.record.provider.foundationdb.{FDBDatabaseFactory, FDBMetaDataStore, FDBRecordStore, RecordStoreNoInfoAndNotEmptyException}
+import com.apple.foundationdb.record.provider.foundationdb.{
+  FDBDatabaseFactory,
+  FDBMetaDataStore,
+  FDBRecordStore,
+  RecordStoreNoInfoAndNotEmptyException
+}
 import com.google.protobuf.ByteString
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.FileDescriptor
 import org.scalatest.FunSuite
 import run.embly.vinyl.Session
-import main.test.Data.testDescriptorBytes
+import run.embly.vinyl.Client
 import scala.util.{Failure, Success, Try}
 
 class DBTest extends FunSuite {
+
+  test("login") {
+    val client = new Client()
+    val ks = "logins"
+
+    assert(client.login(
+      keyspace = "h",
+      descriptorBytes = Fixtures.testDescriptorBytes,
+      records = Nil
+    ).failed.get.getMessage == "Record type User must have a primary key")
+
+    Fixtures.deleteKeyspace(ks, client.db.openContext())
+
+    assert(client.getSession(client.login(
+      ks, Fixtures.testDescriptorBytes, Fixtures.records
+    ).get).get.metaData.getVersion == 0)
+
+    assert(client.getSession(client.login(
+      ks, Fixtures.testDescriptorBytes, Fixtures.records
+    ).get).get.metaData.getVersion == 0)
+
+    assert(client.getSession(client.login(
+      ks, Fixtures.testDescriptorBytes, Fixtures.recordsWithEmailIndex
+    ).get).get.metaData.getVersion == 1)
+
+  }
+
   test("dynamic message") {
 
     assertThrows[MetaDataException] {
@@ -21,8 +53,7 @@ class DBTest extends FunSuite {
     }
     val db = FDBDatabaseFactory.instance().getDatabase()
 
-
-    val session = Session("hi", testDescriptorBytes).get
+    val session = Session("hi", Fixtures.testDescriptorBytes).get
     var context = db.openContext()
     val metaDataSubspace = session.path.toSubspace(context)
     context.ensureActive.clear(Range.startsWith(metaDataSubspace.pack))
@@ -32,7 +63,7 @@ class DBTest extends FunSuite {
     assert(session.path.toString() == "/hi:\"hi\"")
 
     val descriptor: FileDescriptorProto =
-      FileDescriptorProto.parseFrom(testDescriptorBytes.toByteArray)
+      FileDescriptorProto.parseFrom(Fixtures.testDescriptorBytes.toByteArray)
     val fileDescriptor = FileDescriptor.buildFrom(descriptor, Array());
     var metadata: RecordMetaDataBuilder = RecordMetaData
       .newBuilder()
@@ -58,7 +89,7 @@ class DBTest extends FunSuite {
       Session("hi", ByteString.copyFromUtf8("")).get
     }
 
-    val session = Session("hi", testDescriptorBytes).get
+    val session = Session("hi", Fixtures.testDescriptorBytes).get
     val path = session.path
 
     val db = FDBDatabaseFactory.instance().getDatabase()
@@ -70,7 +101,7 @@ class DBTest extends FunSuite {
 
     assert(path.toString() == "/hi:\"hi\"")
     val descriptor: FileDescriptorProto =
-      FileDescriptorProto.parseFrom(testDescriptorBytes.toByteArray)
+      FileDescriptorProto.parseFrom(Fixtures.testDescriptorBytes.toByteArray)
     val fileDescriptor = FileDescriptor.buildFrom(descriptor, Array());
     var metadata: RecordMetaDataBuilder = RecordMetaData
       .newBuilder()

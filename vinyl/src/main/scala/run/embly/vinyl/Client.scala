@@ -2,15 +2,17 @@ package run.embly.vinyl
 
 import com.apple.foundationdb.record.RecordMetaDataProto
 import com.apple.foundationdb.record.metadata.{Index, Key}
-import com.apple.foundationdb.record.provider.foundationdb.{FDBDatabase, FDBDatabaseFactory}
+import com.apple.foundationdb.record.provider.foundationdb.{
+  FDBDatabase,
+  FDBDatabaseFactory
+}
 import com.apple.foundationdb.record.provider.foundationdb.storestate.MetaDataVersionStampStoreStateCacheFactory
 import com.google.protobuf.ByteString
 
 import scala.collection.mutable.HashMap
 import scala.concurrent.ExecutionContext
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 import scala.collection.JavaConverters._
-
 
 class Client {
 
@@ -18,14 +20,22 @@ class Client {
   val activeSessions: HashMap[String, Session] = HashMap()
   val db = setUpDB()
 
-  def setUpDB(): FDBDatabase = {
+  private def setUpDB(): FDBDatabase = {
     val factory = FDBDatabaseFactory.instance()
-    factory.setTrace("./", "vinyl")
+    // factory.setTrace("./", "vinyl")
     val db = factory.getDatabase()
     db.setStoreStateCache(
       MetaDataVersionStampStoreStateCacheFactory.newInstance().getCache(db)
     )
     db
+  }
+
+  def getSession(token: String): Try[Session] = {
+    if (!activeSessions.contains(token)) {
+      Failure(new Exception("no active session with that token"))
+    } else {
+      Success(activeSessions(token))
+    }
   }
 
   def randomString(length: Int) = {
@@ -44,7 +54,11 @@ class Client {
     Success(token)
   }
 
-  def login(keyspace: String, descriptorBytes: ByteString, records: Seq[vinyl.transport.Record]): Try[String] = {
+  def login(
+      keyspace: String,
+      descriptorBytes: ByteString,
+      records: Seq[vinyl.transport.Record]
+  ): Try[String] = {
     // TODO: auth values and session
 
     val tryLogin = for {

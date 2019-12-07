@@ -1,9 +1,22 @@
 package run.embly.vinyl
 
 import com.apple.foundationdb.record.metadata.{Index, Key}
-import com.apple.foundationdb.record.{RecordMetaData, RecordMetaDataBuilder, RecordMetaDataProto}
-import com.apple.foundationdb.record.provider.foundationdb.keyspace.{KeySpace, KeySpaceDirectory, KeySpacePath}
-import com.apple.foundationdb.record.provider.foundationdb.{FDBDatabase, FDBMetaDataStore, FDBRecordContext, FDBRecordStore}
+import com.apple.foundationdb.record.{
+  RecordMetaData,
+  RecordMetaDataBuilder,
+  RecordMetaDataProto
+}
+import com.apple.foundationdb.record.provider.foundationdb.keyspace.{
+  KeySpace,
+  KeySpaceDirectory,
+  KeySpacePath
+}
+import com.apple.foundationdb.record.provider.foundationdb.{
+  FDBDatabase,
+  FDBMetaDataStore,
+  FDBRecordContext,
+  FDBRecordStore
+}
 import com.google.protobuf.ByteString
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
@@ -33,12 +46,23 @@ class Session private (
   }
   def validateAndStoreMetaData(context: FDBRecordContext): Try[Unit] = {
     val mdStore = metaDataStore(context)
-          Try(mdStore.getRecordMetaData()).foreach(md => {
-              // TODO: only increment if they are actually different
-              metaData.setVersion(md.getVersion() + 1)
-          })
-          println("version " + metaData.getVersion)
-    val out = Try(mdStore.saveRecordMetaData(metaData))
+    val out: Try[Unit] = Try(mdStore.getRecordMetaData()) match {
+      case Success(md) => {
+//        print(metaData.getVersion, md.getVersion)
+        if (md.getVersion > metaData.getVersion) {
+          metaData.setVersion(md.getVersion)
+        }
+        if (md.toProto() != metaData.build().toProto()) {
+          metaData.setVersion(md.getVersion() + 1)
+          Try(mdStore.saveRecordMetaData(metaData))
+        } else {
+          Success(())
+        }
+      }
+      case Failure(_) => {
+        Try(mdStore.saveRecordMetaData(metaData))
+      }
+    }
     if (out.isSuccess) {
       context.commit()
     }
@@ -86,6 +110,7 @@ class Session private (
         }
       }
     }
+    metaData.build(true)
     Success()
   }
 
