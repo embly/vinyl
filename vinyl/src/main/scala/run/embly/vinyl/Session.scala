@@ -15,11 +15,13 @@ import com.apple.foundationdb.record.provider.foundationdb.{
   FDBDatabase,
   FDBMetaDataStore,
   FDBRecordContext,
-  FDBRecordStore
+  FDBRecordStore,
+  FDBStoredRecord
 }
-import com.google.protobuf.ByteString
+import com.google.protobuf.{ByteString, DynamicMessage}
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
+import vinyl.transport.Insert
 
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.HashMap
@@ -36,14 +38,34 @@ class Session private (
   }
 
   def recordStore(context: FDBRecordContext): FDBRecordStore = {
-    FDBRecordStore
+    val store = FDBRecordStore
       .newBuilder()
       .setMetaDataProvider(metaData)
       .setMetaDataStore(metaDataStore(context))
       .setContext(context)
       .setKeySpacePath(path.add("data"))
       .createOrOpen()
+    store.setStateCacheability(true)
+    store
   }
+
+  def processInsertions(
+      store: FDBRecordStore,
+      context: FDBRecordContext,
+      insertions: Seq[Insert]
+  ): Try[Unit] = {
+    for (insertion <- insertions) {
+      val descriptor = messageDescriptorMap(insertion.record);
+      val builder = DynamicMessage.newBuilder(descriptor);
+      builder.mergeFrom(insertion.data: ByteString).build()
+      var _resp = store.saveRecord(
+        builder.mergeFrom(insertion.data: ByteString).build()
+      )
+      // todo: return resp
+    }
+    Success(())
+  }
+
   def validateAndStoreMetaData(context: FDBRecordContext): Try[Unit] = {
     val mdStore = metaDataStore(context)
     val out: Try[Unit] = Try(mdStore.getRecordMetaData()) match {
@@ -105,7 +127,6 @@ class Session private (
               Index.buildOptions(options, unique)
             )
           )
-
           // TODO: unique indexes
         }
       }

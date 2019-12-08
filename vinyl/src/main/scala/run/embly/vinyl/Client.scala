@@ -4,10 +4,12 @@ import com.apple.foundationdb.record.RecordMetaDataProto
 import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.provider.foundationdb.{
   FDBDatabase,
-  FDBDatabaseFactory
+  FDBDatabaseFactory,
+  FDBStoredRecord
 }
 import com.apple.foundationdb.record.provider.foundationdb.storestate.MetaDataVersionStampStoreStateCacheFactory
 import com.google.protobuf.ByteString
+import vinyl.transport.{Insert, Request, Response}
 
 import scala.collection.mutable.HashMap
 import scala.concurrent.ExecutionContext
@@ -36,6 +38,34 @@ class Client {
     } else {
       Success(activeSessions(token))
     }
+  }
+
+  def query(
+      token: String,
+      query: Option[vinyl.transport.Query],
+      insertions: Seq[vinyl.transport.Insert]
+  ): Response = {
+    val trySession = getSession(token)
+    if (trySession.isFailure) {
+      return Response(error = trySession.failed.get.getMessage)
+    }
+    val session = trySession.get
+    val context = db.openContext()
+    val tryQuery = for {
+      store <- Try(session.recordStore(context))
+      _ <- session.processInsertions(store, context, insertions)
+      qb <- Try(new QueryBuilder())
+      resp <- Try(qb.processQuery(store, session, query))
+    } yield resp
+
+    val resp = if (tryQuery.isFailure) {
+      Response(error = tryQuery.failed.get.getMessage)
+    } else {
+      context.commit()
+      tryQuery.get
+    }
+    context.close()
+    resp
   }
 
   def randomString(length: Int) = {

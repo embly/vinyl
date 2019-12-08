@@ -22,10 +22,10 @@ class DBTest extends FunSuite {
 
   test("login") {
     val client = new Client()
-    val ks = "logins"
+    val ks = "login"
 
     assert(client.login(
-      keyspace = "h",
+      keyspace = ks,
       descriptorBytes = Fixtures.testDescriptorBytes,
       records = Nil
     ).failed.get.getMessage == "Record type User must have a primary key")
@@ -37,12 +37,17 @@ class DBTest extends FunSuite {
     ).get).get.metaData.getVersion == 0)
 
     assert(client.getSession(client.login(
-      ks, Fixtures.testDescriptorBytes, Fixtures.records
-    ).get).get.metaData.getVersion == 0)
+      ks, Fixtures.testDescriptorBytes, Fixtures.recordsWithEmailIndex
+    ).get).get.metaData.getVersion == 1)
 
     assert(client.getSession(client.login(
       ks, Fixtures.testDescriptorBytes, Fixtures.recordsWithEmailIndex
     ).get).get.metaData.getVersion == 1)
+
+    // todo: support index removal
+//    assert(client.getSession(client.login(
+//      ks, Fixtures.testDescriptorBytes, Fixtures.records
+//    ).get).get.metaData.getVersion == 2)
 
   }
 
