@@ -303,7 +303,6 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 	if err != nil {
 		errors.Wrap(err, "error marshalling proto message")
 	}
-	fmt.Println(b)
 	request.Insertions = append(request.Insertions, &transport.Insert{
 		Record: proto.MessageName(msg),
 		Data:   b,
@@ -335,12 +334,10 @@ func RequestDescription(request *transport.Request) string {
 // SendRequest allows direct sending of a request proto struct
 func (db *DB) SendRequest(request transport.Request) (respProto *transport.Response, err error) {
 	request.Token = db.Token
-	fmt.Println("sending request", request)
 	respProto, err = db.client.Query(context.Background(), &request)
 	if err != nil {
 		return
 	}
-	fmt.Println("go response", respProto)
 	if respProto.Error != "" {
 		err = errors.New(respProto.Error)
 	}

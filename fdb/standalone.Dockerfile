@@ -9,7 +9,7 @@ RUN sbt build || true
 
 COPY ./vinyl /opt/app
 
-RUN sbt assembly
+RUN sbt 'set test in assembly := {}' clean assembly
 
 
 FROM foundationdb/foundationdb

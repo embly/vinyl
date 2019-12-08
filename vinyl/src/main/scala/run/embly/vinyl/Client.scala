@@ -5,6 +5,7 @@ import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.provider.foundationdb.{
   FDBDatabase,
   FDBDatabaseFactory,
+  FDBRecordContext,
   FDBStoredRecord
 }
 import com.apple.foundationdb.record.provider.foundationdb.storestate.MetaDataVersionStampStoreStateCacheFactory
@@ -21,6 +22,7 @@ class Client {
   implicit val ec = ExecutionContext.global
   val activeSessions: HashMap[String, Session] = HashMap()
   val db = setUpDB()
+
 
   private def setUpDB(): FDBDatabase = {
     val factory = FDBDatabaseFactory.instance()
@@ -40,6 +42,7 @@ class Client {
     }
   }
 
+
   def query(
       token: String,
       query: Option[vinyl.transport.Query],
@@ -50,24 +53,25 @@ class Client {
       return Response(error = trySession.failed.get.getMessage)
     }
     val session = trySession.get
-    val context = db.openContext()
-    val tryQuery = for {
-      mdStore <- Try(session.metaDataStore(context))
-      store <- Try(session.recordStore(context, mdStore))
-      _ <- session.processInsertions(store, mdStore, insertions)
-      qb <- Try(new QueryBuilder())
-      resp <- Try(qb.processQuery(store, session, query))
-    } yield resp
-    val resp = if (tryQuery.isFailure) {
-      val err = tryQuery.failed.get
-      err.printStackTrace()
-      Response(error = err.getMessage)
-    } else {
-      context.commit()
-      tryQuery.get
+
+    def run(context: FDBRecordContext): Response = {
+      var resp = Response()
+      val tryQuery = for {
+        mdStore <- Try(session.metaDataStore(context))
+        store <- Try(session.recordStore(context, mdStore))
+        _ <- session.processInsertions(store, mdStore, insertions)
+        qb <- Try(new QueryBuilder())
+        resp <- Try(qb.processQuery(store, session, query))
+      } yield resp
+      if (tryQuery.isFailure) {
+        val err = tryQuery.failed.get
+        err.printStackTrace()
+        Response(error = err.getMessage)
+      } else {
+        tryQuery.get
+      }
     }
-    context.close()
-    resp
+    RunIt.run(db, run)
   }
 
   def randomString(length: Int) = {
@@ -81,7 +85,7 @@ class Client {
   }
 
   def genToken(session: Session): Try[String] = {
-    val token = randomString(32)
+    val token = randomString(16)
     activeSessions += (token -> session)
     Success(token)
   }
