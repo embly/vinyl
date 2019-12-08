@@ -134,8 +134,7 @@ class DBTest extends FunSuite {
     val recordBytes: Array[Byte] = Array(10, 8, 119, 104, 97, 116, 101, 118,
       101, 114, 18, 11, 109, 97, 120, 64, 109, 97, 120, 46, 99, 111, 109)
 
-    val recordDescriptor = session.messageDescriptorMap("User")
-    println("and here", session.metaData.build().getRecordTypeForDescriptor(recordDescriptor))
+    val recordDescriptor = session.metaData.getRecordType("User").getDescriptor
     val builder = DynamicMessage.newBuilder(recordDescriptor)
     store.saveRecord(builder.mergeFrom(recordBytes).build())
 
@@ -182,12 +181,6 @@ class DBTest extends FunSuite {
     context.close()
     session.metaData = metadata
 
-    for (messageType <- fileDescriptor.getMessageTypes().asScala) {
-      println(s"registering descriptor for type: ${messageType.getName}")
-      session.messageDescriptorMap += (messageType.getName -> messageType)
-    }
-
-
     context = db.openContext()
     Try(
       FDBRecordStore
@@ -199,27 +192,13 @@ class DBTest extends FunSuite {
         .createOrOpen()
     ) match {
       case Success(store) =>
-        println("we did it ", store)
         val recordBytes: Array[Byte] = Array(10, 8, 119, 104, 97, 116, 101, 118,
           101, 114, 18, 11, 109, 97, 120, 64, 109, 97, 120, 46, 99, 111, 109)
-
-        val recordDescriptor = session.messageDescriptorMap("User")
-        println(session.metaData.build().getRecordTypes())
-        println(session.metaData.build().getRecordTypeForDescriptor(recordDescriptor))
-        println(recordDescriptor.toProto)
-        val metaDataXX = mdStore.getRecordMetaData()
-
-        val builder = DynamicMessage.newBuilder(metaDataXX.getRecordType("User").getDescriptor)
+        val metaData = mdStore.getRecordMetaData()
+        val descriptor = metaData.getRecordType("User").getDescriptor
+        val builder = DynamicMessage.newBuilder(descriptor)
         val record = builder.mergeFrom(ByteString.copyFrom(recordBytes)).build()
-        println(metaDataXX.toProto() == session.metaData.build().toProto())
-        val recordDescriptorXX = record.getDescriptorForType()
-        println("-------------------------------------------")
-
-        println(recordDescriptorXX.getName,recordDescriptor.getName)
-        println(metaDataXX.getRecordType("User").getDescriptor == recordDescriptorXX)
-        println(metaDataXX.getRecordTypes, session.metaData.build().getRecordTypes)
-        println("-------------------------------------------")
-        val recordType = metaDataXX.getRecordTypeForDescriptor(recordDescriptorXX);
+        metaData.getRecordTypeForDescriptor(descriptor);
         store.saveRecord(record)
 
       case Failure(e) =>

@@ -13,25 +13,22 @@ import com.apple.foundationdb.record.provider.foundationdb.keyspace.{
   KeySpacePath
 }
 import com.apple.foundationdb.record.provider.foundationdb.{
-  FDBDatabase,
   FDBMetaDataStore,
   FDBRecordContext,
-  FDBRecordStore,
-  FDBStoredRecord
+  FDBRecordStore
 }
 import com.google.protobuf.{ByteString, Descriptors, DynamicMessage}
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
-import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
+import com.google.protobuf.Descriptors.{FileDescriptor}
 import vinyl.transport.Insert
 
 import scala.util.{Failure, Success, Try}
-import scala.collection.mutable.HashMap
 import scala.collection.JavaConverters._
 
 class Session private (
     var keySpace: KeySpace,
     var path: KeySpacePath,
-    var metaData: RecordMetaDataBuilder,
+    var metaData: RecordMetaDataBuilder
 ) {
   def metaDataStore(context: FDBRecordContext): FDBMetaDataStore = {
     val out = new FDBMetaDataStore(context, path.add("meta_data"))
@@ -44,7 +41,10 @@ class Session private (
     out
   }
 
-  def recordStore(context: FDBRecordContext, mdStore: FDBMetaDataStore): FDBRecordStore = {
+  def recordStore(
+      context: FDBRecordContext,
+      mdStore: FDBMetaDataStore
+  ): FDBRecordStore = {
     val store = FDBRecordStore
       .newBuilder()
       .setMetaDataProvider(metaData)
@@ -62,7 +62,8 @@ class Session private (
       insertions: Seq[Insert]
   ): Try[Unit] = {
     for (insertion <- insertions) {
-      val descriptor = mdStore.getRecordMetaData.getRecordType(insertion.record).getDescriptor
+      val descriptor =
+        mdStore.getRecordMetaData.getRecordType(insertion.record).getDescriptor
       val builder = DynamicMessage.newBuilder(descriptor)
       var _resp = store.saveRecord(
         builder.mergeFrom(insertion.data: ByteString).build()
@@ -76,11 +77,9 @@ class Session private (
     val mdStore = metaDataStore(context)
     val out: Try[Unit] = Try(mdStore.getRecordMetaData()) match {
       case Success(md) => {
-//        print(metaData.getVersion, md.getVersion)
         if (md.getVersion > metaData.getVersion) {
           metaData.setVersion(md.getVersion)
         }
-//        println(md.toProto(), md.toProto())
         if (md.toProto() != metaData.build().toProto()) {
           metaData.setVersion(md.getVersion() + 1)
           Try(mdStore.saveRecordMetaData(metaData))
@@ -96,7 +95,6 @@ class Session private (
       context.commit()
     }
     context.close()
-    println(mdStore.getRecordMetaData.toProto())
     out
   }
   def addMeteDataRecords(records: Seq[vinyl.transport.Record]): Try[Unit] = {
@@ -120,12 +118,10 @@ class Session private (
           )
 
         } else if (idx.isDefined && idx.get.`type` == "value") {
-          // println(s"Adding index to '${record.name}' for field '$name'")
           val index_name = record.name + "." + name
           val unique: Boolean = idx.get.unique
           val options: java.util.List[RecordMetaDataProto.Index.Option] =
             Nil.asJava
-          // println(s"${new Index(index_name, Key.Expressions.field(name), "value", Index.buildOptions(options, unique)).isUnique}")
           metaData.addIndex(
             record.name: String,
             new Index(
