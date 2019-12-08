@@ -52,14 +52,16 @@ class Client {
     val session = trySession.get
     val context = db.openContext()
     val tryQuery = for {
-      store <- Try(session.recordStore(context))
-      _ <- session.processInsertions(store, context, insertions)
+      mdStore <- Try(session.metaDataStore(context))
+      store <- Try(session.recordStore(context, mdStore))
+      _ <- session.processInsertions(store, mdStore, insertions)
       qb <- Try(new QueryBuilder())
       resp <- Try(qb.processQuery(store, session, query))
     } yield resp
-
     val resp = if (tryQuery.isFailure) {
-      Response(error = tryQuery.failed.get.getMessage)
+      val err = tryQuery.failed.get
+      err.printStackTrace()
+      Response(error = err.getMessage)
     } else {
       context.commit()
       tryQuery.get

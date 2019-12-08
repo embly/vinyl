@@ -6,4 +6,4 @@ docker-compose down
 docker-compose up -d client fdb
 docker-compose logs -f &
 sleep 5
-# docker-compose exec client sbt ~reStart
+docker-compose exec client sbt ~reStart

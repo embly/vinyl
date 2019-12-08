@@ -303,6 +303,7 @@ func (db *DB) Insert(msg proto.Message) (err error) {
 	if err != nil {
 		errors.Wrap(err, "error marshalling proto message")
 	}
+	fmt.Println(b)
 	request.Insertions = append(request.Insertions, &transport.Insert{
 		Record: proto.MessageName(msg),
 		Data:   b,

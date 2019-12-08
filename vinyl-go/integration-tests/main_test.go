@@ -46,14 +46,14 @@ func TestInit(t *testing.T) {
 		}},
 	})
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	db.Close()
 }
 
 func TestInsert(t *testing.T) {
 
-	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/134", vinyl.Metadata{
+	db, err := vinyl.Connect("vinyl://max:password@localhost:8090/40", vinyl.Metadata{
 		Descriptor: proto.FileDescriptor("tables.proto"),
 		Records: []vinyl.Record{{
 			Name:       "User",
@@ -65,7 +65,7 @@ func TestInsert(t *testing.T) {
 		}},
 	})
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	defer db.Close()
 	user := User{
@@ -74,7 +74,7 @@ func TestInsert(t *testing.T) {
 	}
 
 	if err := db.Insert(&user); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 }
@@ -93,7 +93,7 @@ func TestBasic(t *testing.T) {
 		}},
 	})
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	defer db.Close()
 	user := User{
@@ -104,7 +104,7 @@ func TestBasic(t *testing.T) {
 
 	t1 := time.Now()
 	if err := db.Insert(&user); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	fmt.Println("over", time.Now().Sub(t1))
 
@@ -115,7 +115,7 @@ func TestBasic(t *testing.T) {
 		Email: "max2@max.com",
 	}
 	if err := db.Insert(&user2); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	queryResponse := []User{}
@@ -126,7 +126,7 @@ func TestBasic(t *testing.T) {
 		),
 		qm.Limit(10),
 	); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	user.XXX_sizecache = 0
 	user2.XXX_sizecache = 0
@@ -134,7 +134,7 @@ func TestBasic(t *testing.T) {
 
 	users := []User{}
 	if err := db.ExecuteQuery(&users, nil); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	user.XXX_sizecache = 0
@@ -143,13 +143,13 @@ func TestBasic(t *testing.T) {
 
 	pkUser := User{}
 	if err := db.LoadRecord(&pkUser, "whoever"); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, pkUser, user2)
 
 	userAgain := User{}
 	if err := db.DeleteRecord(&userAgain, "whoever"); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	pkUser = User{}
@@ -157,13 +157,13 @@ func TestBasic(t *testing.T) {
 	assert.Equal(t, pkUser, User{})
 
 	if err := db.DeleteWhere(&User{}, nil); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	users = []User{}
 	_ = users
 	if err := db.ExecuteQuery(&users, nil); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	assert.Equal(t, []User{}, users)
 }

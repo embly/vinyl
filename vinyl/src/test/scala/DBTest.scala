@@ -10,12 +10,15 @@ import com.apple.foundationdb.record.provider.foundationdb.{
   FDBRecordStore,
   RecordStoreNoInfoAndNotEmptyException
 }
-import com.google.protobuf.ByteString
+import com.github.os72.protobuf.dynamic.DynamicSchema
+import com.google.protobuf.{ByteString, DynamicMessage}
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.FileDescriptor
 import org.scalatest.FunSuite
 import run.embly.vinyl.Session
 import run.embly.vinyl.Client
+import scala.collection.JavaConverters._
+
 import scala.util.{Failure, Success, Try}
 
 class DBTest extends FunSuite {
@@ -24,25 +27,67 @@ class DBTest extends FunSuite {
     val client = new Client()
     val ks = "login"
 
-    assert(client.login(
-      keyspace = ks,
-      descriptorBytes = Fixtures.testDescriptorBytes,
-      records = Nil
-    ).failed.get.getMessage == "Record type User must have a primary key")
+    assert(
+      client
+        .login(
+          keyspace = ks,
+          descriptorBytes = Fixtures.testDescriptorBytes,
+          records = Nil
+        )
+        .failed
+        .get
+        .getMessage == "Record type User must have a primary key"
+    )
 
     Fixtures.deleteKeyspace(ks, client.db.openContext())
 
-    assert(client.getSession(client.login(
-      ks, Fixtures.testDescriptorBytes, Fixtures.records
-    ).get).get.metaData.getVersion == 0)
+    assert(
+      client
+        .getSession(
+          client
+            .login(
+              ks,
+              Fixtures.testDescriptorBytes,
+              Fixtures.records
+            )
+            .get
+        )
+        .get
+        .metaData
+        .getVersion == 0
+    )
 
-    assert(client.getSession(client.login(
-      ks, Fixtures.testDescriptorBytes, Fixtures.recordsWithEmailIndex
-    ).get).get.metaData.getVersion == 1)
+    assert(
+      client
+        .getSession(
+          client
+            .login(
+              ks,
+              Fixtures.testDescriptorBytes,
+              Fixtures.recordsWithEmailIndex
+            )
+            .get
+        )
+        .get
+        .metaData
+        .getVersion == 1
+    )
 
-    assert(client.getSession(client.login(
-      ks, Fixtures.testDescriptorBytes, Fixtures.recordsWithEmailIndex
-    ).get).get.metaData.getVersion == 1)
+    assert(
+      client
+        .getSession(
+          client
+            .login(
+              ks,
+              Fixtures.testDescriptorBytes,
+              Fixtures.recordsWithEmailIndex
+            )
+            .get
+        )
+        .get
+        .metaData
+        .getVersion == 1
+    )
 
     // todo: support index removal
 //    assert(client.getSession(client.login(
@@ -85,6 +130,15 @@ class DBTest extends FunSuite {
       .setContext(context)
       .setKeySpacePath(session.path)
       .createOrOpen()
+
+    val recordBytes: Array[Byte] = Array(10, 8, 119, 104, 97, 116, 101, 118,
+      101, 114, 18, 11, 109, 97, 120, 64, 109, 97, 120, 46, 99, 111, 109)
+
+    val recordDescriptor = session.messageDescriptorMap("User")
+    println("and here", session.metaData.build().getRecordTypeForDescriptor(recordDescriptor))
+    val builder = DynamicMessage.newBuilder(recordDescriptor)
+    store.saveRecord(builder.mergeFrom(recordBytes).build())
+
     db.close()
   }
 
@@ -112,6 +166,7 @@ class DBTest extends FunSuite {
       .newBuilder()
       .setRecords(fileDescriptor)
     metadata.setVersion(2)
+    session.metaData.setVersion(2)
 
     val recordType = metadata.getRecordType("User")
     recordType.setPrimaryKey(
@@ -120,17 +175,24 @@ class DBTest extends FunSuite {
     )
 
     context = db.openContext()
-    val mdStore = session.metaDataStore(context)
-    mdStore.saveRecordMetaData(metadata)
+    var mdStore = session.metaDataStore(context)
+    mdStore.saveRecordMetaData(metadata.build())
     mdStore.setLocalFileDescriptor(fileDescriptor)
     context.commit()
     context.close()
+    session.metaData = metadata
+
+    for (messageType <- fileDescriptor.getMessageTypes().asScala) {
+      println(s"registering descriptor for type: ${messageType.getName}")
+      session.messageDescriptorMap += (messageType.getName -> messageType)
+    }
+
 
     context = db.openContext()
     Try(
       FDBRecordStore
         .newBuilder()
-        .setMetaDataProvider(metadata.build(true))
+        .setMetaDataProvider(session.metaData)
         .setMetaDataStore(mdStore)
         .setContext(context)
         .setKeySpacePath(path.add("data"))
@@ -138,6 +200,28 @@ class DBTest extends FunSuite {
     ) match {
       case Success(store) =>
         println("we did it ", store)
+        val recordBytes: Array[Byte] = Array(10, 8, 119, 104, 97, 116, 101, 118,
+          101, 114, 18, 11, 109, 97, 120, 64, 109, 97, 120, 46, 99, 111, 109)
+
+        val recordDescriptor = session.messageDescriptorMap("User")
+        println(session.metaData.build().getRecordTypes())
+        println(session.metaData.build().getRecordTypeForDescriptor(recordDescriptor))
+        println(recordDescriptor.toProto)
+        val metaDataXX = mdStore.getRecordMetaData()
+
+        val builder = DynamicMessage.newBuilder(metaDataXX.getRecordType("User").getDescriptor)
+        val record = builder.mergeFrom(ByteString.copyFrom(recordBytes)).build()
+        println(metaDataXX.toProto() == session.metaData.build().toProto())
+        val recordDescriptorXX = record.getDescriptorForType()
+        println("-------------------------------------------")
+
+        println(recordDescriptorXX.getName,recordDescriptor.getName)
+        println(metaDataXX.getRecordType("User").getDescriptor == recordDescriptorXX)
+        println(metaDataXX.getRecordTypes, session.metaData.build().getRecordTypes)
+        println("-------------------------------------------")
+        val recordType = metaDataXX.getRecordTypeForDescriptor(recordDescriptorXX);
+        store.saveRecord(record)
+
       case Failure(e) =>
         println("oh no", e)
         e match {

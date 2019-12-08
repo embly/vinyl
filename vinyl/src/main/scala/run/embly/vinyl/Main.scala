@@ -62,16 +62,20 @@ class VinylServer(executionContext: ExecutionContext) { self =>
 
   private class VinylImpl extends VinylGrpc.Vinyl {
     override def login(req: LoginRequest): Future[LoginResponse] = {
+      println("login request: "+req)
       Future.successful(
         client.login(req.keyspace, req.fileDescriptor, req.records) match {
           case Success(token) => LoginResponse(token = token)
-          case Failure(e)     => LoginResponse(error = e.getMessage)
+          case Failure(e)     =>
+            println(e.printStackTrace())
+            LoginResponse(error = e.getMessage)
         }
       )
     }
     override def query(
         req: Request
     ): Future[Response] = {
+      println("query request: "+req)
       Future.successful(client.query(req.token, req.query, req.insertions))
     }
   }

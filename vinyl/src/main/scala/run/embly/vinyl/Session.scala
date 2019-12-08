@@ -4,6 +4,7 @@ import com.apple.foundationdb.record.metadata.{Index, Key}
 import com.apple.foundationdb.record.{
   RecordMetaData,
   RecordMetaDataBuilder,
+  RecordMetaDataOptionsProto,
   RecordMetaDataProto
 }
 import com.apple.foundationdb.record.provider.foundationdb.keyspace.{
@@ -18,7 +19,7 @@ import com.apple.foundationdb.record.provider.foundationdb.{
   FDBRecordStore,
   FDBStoredRecord
 }
-import com.google.protobuf.{ByteString, DynamicMessage}
+import com.google.protobuf.{ByteString, Descriptors, DynamicMessage}
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
 import vinyl.transport.Insert
@@ -31,17 +32,23 @@ class Session private (
     var keySpace: KeySpace,
     var path: KeySpacePath,
     var metaData: RecordMetaDataBuilder,
-    var messageDescriptorMap: HashMap[String, Descriptor]
 ) {
   def metaDataStore(context: FDBRecordContext): FDBMetaDataStore = {
-    new FDBMetaDataStore(context, path.add("meta_data"))
+    val out = new FDBMetaDataStore(context, path.add("meta_data"))
+    out.setMaintainHistory(false) // ??
+    out.setDependencies(
+      Array[Descriptors.FileDescriptor](
+        RecordMetaDataOptionsProto.getDescriptor()
+      )
+    )
+    out
   }
 
-  def recordStore(context: FDBRecordContext): FDBRecordStore = {
+  def recordStore(context: FDBRecordContext, mdStore: FDBMetaDataStore): FDBRecordStore = {
     val store = FDBRecordStore
       .newBuilder()
       .setMetaDataProvider(metaData)
-      .setMetaDataStore(metaDataStore(context))
+      .setMetaDataStore(mdStore)
       .setContext(context)
       .setKeySpacePath(path.add("data"))
       .createOrOpen()
@@ -51,13 +58,12 @@ class Session private (
 
   def processInsertions(
       store: FDBRecordStore,
-      context: FDBRecordContext,
+      mdStore: FDBMetaDataStore,
       insertions: Seq[Insert]
   ): Try[Unit] = {
     for (insertion <- insertions) {
-      val descriptor = messageDescriptorMap(insertion.record);
-      val builder = DynamicMessage.newBuilder(descriptor);
-      builder.mergeFrom(insertion.data: ByteString).build()
+      val descriptor = mdStore.getRecordMetaData.getRecordType(insertion.record).getDescriptor
+      val builder = DynamicMessage.newBuilder(descriptor)
       var _resp = store.saveRecord(
         builder.mergeFrom(insertion.data: ByteString).build()
       )
@@ -74,6 +80,7 @@ class Session private (
         if (md.getVersion > metaData.getVersion) {
           metaData.setVersion(md.getVersion)
         }
+//        println(md.toProto(), md.toProto())
         if (md.toProto() != metaData.build().toProto()) {
           metaData.setVersion(md.getVersion() + 1)
           Try(mdStore.saveRecordMetaData(metaData))
@@ -89,6 +96,7 @@ class Session private (
       context.commit()
     }
     context.close()
+    println(mdStore.getRecordMetaData.toProto())
     out
   }
   def addMeteDataRecords(records: Seq[vinyl.transport.Record]): Try[Unit] = {
@@ -148,11 +156,6 @@ object Session {
     val metadata: RecordMetaDataBuilder = RecordMetaData
       .newBuilder()
       .setRecords(fileDescriptor)
-    var messageDescriptorMap: HashMap[String, Descriptor] = HashMap()
-    for (messageType <- fileDescriptor.getMessageTypes().asScala) {
-      // println(s"registering descriptor for type: ${messageType.getName}")
-      messageDescriptorMap += (messageType.getName -> messageType)
-    }
 
     var keyspace = new KeySpace(
       new KeySpaceDirectory(
@@ -172,7 +175,7 @@ object Session {
     )
     var path = keyspace.path(ks)
 
-    Success(new Session(keyspace, path, metadata, messageDescriptorMap))
+    Success(new Session(keyspace, path, metadata))
   }
 
   def apply(ks: String, descriptorBytes: ByteString): Try[Session] = {
